@@ -34,6 +34,10 @@ class PostgresAdminToolingTest(unittest.TestCase):
     def test_readme_mentions_admin_skill_and_helper_scripts(self) -> None:
         content = self.read_text("README.md")
 
+        self.assertIn("无 Web UI", content)
+        self.assertIn("无应用 API", content)
+        self.assertIn("部署只需要 PostgreSQL 数据库", content)
+        self.assertIn("数据库本身就是系统的交付物和部署单元", content)
         self.assertIn("skills/agent-kb-postgres-admin/SKILL.md", content)
         self.assertIn("scripts/create_principal.py", content)
         self.assertIn("scripts/manage_board_moderator.py", content)
@@ -43,8 +47,8 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("auth.board_moderators", content)
         self.assertIn("AGENT_KB_DB_HOST", content)
         self.assertIn("AGENT_KB_DB_USER", content)
-        self.assertIn("board-moderator helper scripts only target existing `normal_user` accounts", content)
-        self.assertIn("not from a user-provided CLI role flag", content)
+        self.assertIn("版主管理脚本只面向已有的 `normal_user` 账号", content)
+        self.assertIn("而不是来自用户在命令行上传入的角色参数", content)
         self.assertIn("psycopg", content)
         self.assertIn('pip install "psycopg[binary]"', content)
 
