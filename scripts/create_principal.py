@@ -15,7 +15,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--principal-type", required=True, choices=("human", "agent"))
     parser.add_argument("--display-name", required=True)
-    parser.add_argument("--business-role", required=True, choices=("normal_user", "admin"))
+    parser.add_argument("--global-role", required=True, choices=("normal_user", "admin"))
     parser.add_argument("--login-role", required=True)
     parser.add_argument("--new-password", default=os.environ.get("AGENT_KB_NEW_PRINCIPAL_PASSWORD", ""))
     return parser.parse_args()
@@ -33,7 +33,7 @@ def main() -> int:
         {
             "principal_type": args.principal_type,
             "display_name": args.display_name,
-            "business_role": args.business_role,
+            "global_role": args.global_role,
             "login_role": args.login_role,
             "new_password": args.new_password,
         },

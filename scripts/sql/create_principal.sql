@@ -1,21 +1,34 @@
 DO $$
 BEGIN
-  IF app.current_business_role() = 'admin'::app.business_role
-     AND {{business_role}} <> 'normal_user' THEN
-    RAISE EXCEPTION 'policy violation: admin may create only normal_user principals';
-  ELSIF app.current_business_role() = 'super_admin'::app.business_role
-     AND {{business_role}} NOT IN ('normal_user', 'admin') THEN
-    RAISE EXCEPTION 'policy violation: super_admin may create only normal_user or admin principals';
-  ELSIF app.current_business_role() NOT IN ('admin'::app.business_role, 'super_admin'::app.business_role) THEN
-    RAISE EXCEPTION 'policy violation: only admin or super_admin may create principals';
+  IF auth.is_admin()
+     AND NOT auth.is_super_admin()
+     AND {{global_role}} <> 'normal_user' THEN
+    RAISE EXCEPTION 'policy violation: admin may create only normal_user accounts';
+  ELSIF auth.is_super_admin()
+     AND {{global_role}} NOT IN ('normal_user', 'admin') THEN
+    RAISE EXCEPTION 'policy violation: super_admin may create only normal_user or admin accounts';
+  ELSIF NOT auth.is_admin() THEN
+    RAISE EXCEPTION 'policy violation: only admin or super_admin may create accounts';
   END IF;
 END
 $$;
 
-SELECT * FROM app.bootstrap_principal(
-  {{principal_type}},
-  {{display_name}},
-  {{business_role}},
-  {{login_role}},
-  {{new_password}}
-);
+WITH created_account AS (
+  INSERT INTO auth.accounts (principal_type, display_name, pg_login_role, account_status)
+  VALUES ({{principal_type}}, {{display_name}}, {{login_role}}, 'active')
+  RETURNING id, principal_type, display_name, pg_login_role, account_status
+),
+created_login AS (
+  SELECT auth.create_account_login(
+    {{login_role}},
+    {{new_password}}
+  )
+),
+granted_role AS (
+  INSERT INTO auth.principal_global_roles (account_id, role_name, granted_by)
+  SELECT created_account.id, {{global_role}}, auth.current_account_id()
+  FROM created_account
+  ON CONFLICT (account_id, role_name) DO NOTHING
+)
+SELECT id, principal_type, display_name, pg_login_role, account_status
+FROM created_account;
