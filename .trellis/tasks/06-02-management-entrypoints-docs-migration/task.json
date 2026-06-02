@@ -3,7 +3,7 @@
   "name": "management-entrypoints-docs-migration",
   "title": "management entrypoints and docs migration",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -19,7 +19,7 @@
   "pr_url": null,
   "subtasks": [],
   "children": [],
-  "parent": "double-schema-design-merge",
+  "parent": null,
   "relatedFiles": [],
   "notes": "",
   "meta": {}
