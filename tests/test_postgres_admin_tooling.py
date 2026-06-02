@@ -51,6 +51,9 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("而不是来自用户在命令行上传入的角色参数", content)
         self.assertIn("psycopg", content)
         self.assertIn('pip install "psycopg[binary]"', content)
+        self.assertIn("普通用户连接与身份验证", content)
+        self.assertIn("不负责创建账号", content)
+        self.assertIn("如果需要创建账号或管理权限，请改用 `skills/agent-kb-postgres-admin/SKILL.md`", content)
 
     def test_expected_python_and_sql_files_exist(self) -> None:
         self.assert_exists("scripts/_postgres_admin_common.py")

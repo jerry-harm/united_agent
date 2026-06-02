@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Verify skill docs and any optional helper still match the repository structure and shipped files"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify README/skill/test contract changes remain accurate and tests stay green"}
+{"file": ".trellis/tasks/06-02-brainstorm-pythonize-postgres-connect-skill/research/current-skill-boundary.md", "reason": "Verify the implementation actually removes the stale overlap with privileged admin workflows"}

@@ -85,22 +85,37 @@ docker compose up -d
 
 ## 连接与验证
 
-本地连接：
-
-```bash
-psql postgresql://postgres:postgres@localhost:5432/united_agent
-```
-
 启动后，初始化 SQL 会创建 schema，并写入一个本地 bootstrap 账号：
 
 - PostgreSQL 登录：`postgres`
 - 全局角色：`super_admin`
 - 显示名：`Local Postgres Bootstrap`
 
-验证 bootstrap 是否生效：
+验证 bootstrap 是否生效时，优先使用与当前 skills 一致的 Python + `psycopg` 路径：
 
-```sql
-SELECT current_user, session_user, auth.current_account_id(), auth.current_account_status();
+```bash
+export AGENT_KB_DB_HOST=localhost
+export AGENT_KB_DB_PORT=5432
+export AGENT_KB_DB_NAME=united_agent
+export AGENT_KB_DB_USER=postgres
+export AGENT_KB_DB_PASSWORD=postgres
+
+python3 - <<'PY'
+import os
+import psycopg
+
+with psycopg.connect(
+    host=os.environ["AGENT_KB_DB_HOST"],
+    port=os.environ.get("AGENT_KB_DB_PORT", "5432"),
+    dbname=os.environ.get("AGENT_KB_DB_NAME", "united_agent"),
+    user=os.environ["AGENT_KB_DB_USER"],
+    password=os.environ["AGENT_KB_DB_PASSWORD"],
+) as conn, conn.cursor() as cur:
+    cur.execute(
+        "SELECT current_user, session_user, auth.current_account_id(), auth.current_account_status();"
+    )
+    print(cur.fetchone())
+PY
 ```
 
 当你以 `postgres` 连接时，这条查询应当解析到刚刚写入的 bootstrap 账号。
@@ -112,20 +127,24 @@ SELECT current_user, session_user, auth.current_account_id(), auth.current_accou
 - `skills/agent-kb-postgres-connect/SKILL.md`
 - `skills/agent-kb-postgres-admin/SKILL.md`
 
-它们的边界都很窄，职责是帮助用户或 agent 连接一个已经运行中的 PostgreSQL 实例，并执行账号创建、身份验证或管理操作。
+它们的边界都很窄，但职责已经拆开：一个面向普通用户连接与身份验证，另一个面向特权管理。
 
 `skills/agent-kb-postgres-connect/SKILL.md` 主要覆盖：
 
-- 用 `psql` 建立连接
-- 按仓库内 `auth` schema 的 SQL 约定创建登录账号
-- 重新以新账号连接
-- 验证 `current_user`、`session_user` 与账号状态映射
+- 用 Python + `psycopg` 连接一个已经运行中的数据库
+- 验证现有凭据是否能解析到预期的 `auth.accounts` 身份
+- 检查 `current_user`、`session_user`、账号状态与登录映射是否一致
 
 它不负责：
 
+- 创建账号（也就是：不负责创建账号）
+- 创建登录账号
+- 分配全局角色或版主权限
 - 启动 Docker Compose
 - 申请或初始化服务器
 - 更宽泛的运维托管工作
+
+如果需要创建账号或管理权限，请改用 `skills/agent-kb-postgres-admin/SKILL.md`。
 
 实际使用时，先自行启动数据库，再把 `SKILL.md` 文件加载到对应 agent 环境即可。
 
@@ -192,15 +211,7 @@ python3 scripts/create_principal.py \
 - `auth.principal_global_roles`
 - `auth.create_account_login(...)`
 
-创建完成后，可以重新连接验证映射：
-
-```bash
-psql postgresql://example_moderator:change-this-password@localhost:5432/united_agent
-```
-
-```sql
-SELECT current_user, session_user, auth.current_account_id(), auth.current_account_status();
-```
+创建完成后，普通用户侧的连接与身份验证应交给 `skills/agent-kb-postgres-connect/SKILL.md`，按 Python + `psycopg` 路径重新验证映射。
 
 ### 查看账号与授权
 

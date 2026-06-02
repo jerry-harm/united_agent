@@ -1,100 +1,141 @@
 ---
 name: agent-kb-postgres-connect
-description: Use when a user or agent needs to connect to an already running PostgreSQL-backed agent knowledge base server, needs the bootstrap SQL for creating a per-account login, or needs the standard psql connection flow for this repository.
+description: Use when a user or agent already has PostgreSQL credentials for this repository and needs the standard Python and psycopg path to connect, verify the login works, and confirm the session resolves to the expected auth.accounts identity without doing privileged account creation or role management.
+compatibility:
+  - Python 3
+  - psycopg
 ---
 
 # Agent KB Postgres Connect
 
-Use this skill to connect to an already running PostgreSQL-backed agent knowledge base, bootstrap a new account when you have admin access, and verify that the direct-login + RLS model works.
+Use this skill for the ordinary-user connection and identity-verification path in the running PostgreSQL knowledge base.
 
-## Scope
+If you already have host, database, login role, and password, this skill shows the standard Python-first way to prove the credentials work and resolve to the expected account.
 
-This skill is for client-side connection and login verification.
+## Dependencies
 
-It does not cover:
-- starting the PostgreSQL server
-- operating Docker Compose
-- provisioning the server host itself
-
-## Required Connection Inputs
-
-Before connecting, obtain these from the server owner or environment config:
-- host
-- port
-- database name (local default: `united_agent`)
-- login role
-- password
-
-## Connect As Admin
-
-Use this when you already have an admin or bootstrap login on the server.
+This skill expects Python with `psycopg` installed.
 
 ```bash
-psql postgresql://<ADMIN_LOGIN_ROLE>:<ADMIN_PASSWORD>@<DB_HOST>:<DB_PORT>/<DB_NAME>
+pip install "psycopg[binary]"
 ```
 
-Replace each placeholder with the real server connection details.
+## Use This For
 
-## Create A Dedicated Account Login
+- connecting to an already running repository database with an existing login
+- verifying the login resolves to the expected `auth.accounts` row
+- checking that the resolved account is active before doing normal user work
+- confirming the repository's `session_user`-based identity mapping is behaving as expected
 
-From an admin session, create a dedicated account login:
+## This Skill Does Not Cover
 
-```sql
-INSERT INTO auth.accounts (principal_type, display_name, pg_login_role, account_status)
-VALUES ('<PRINCIPAL_TYPE>', '<DISPLAY_NAME>', '<NEW_LOGIN_ROLE>', 'active');
+This skill does not:
 
-SELECT auth.create_account_login(
-  '<NEW_LOGIN_ROLE>',
-  '<NEW_LOGIN_PASSWORD>'
-);
+- create accounts
+- grant or revoke roles
+- assign board moderators
+- start PostgreSQL or Docker Compose
 
-INSERT INTO auth.principal_global_roles (account_id, role_name, granted_by)
-VALUES (<ACCOUNT_ID>, '<GLOBAL_ROLE>', auth.current_account_id());
-```
+If you need to create accounts or manage permissions, use `skills/agent-kb-postgres-admin/SKILL.md` instead.
 
-## Connect As The New Account
+## Required Inputs
 
-Reconnect as the newly created account:
+Obtain these from the server owner or environment config:
+
+- `AGENT_KB_DB_HOST`
+- `AGENT_KB_DB_USER`
+- `AGENT_KB_DB_PASSWORD`
+
+Optional:
+
+- `AGENT_KB_DB_PORT` (default `5432`)
+- `AGENT_KB_DB_NAME` (default `united_agent`)
+- `AGENT_KB_EXPECTED_LOGIN_ROLE` if you want an explicit role-name check
+- `AGENT_KB_EXPECTED_DISPLAY_NAME` if you want an explicit account-name check
+
+## Verify A Normal Login With Python
 
 ```bash
-psql postgresql://<NEW_LOGIN_ROLE>:<NEW_LOGIN_PASSWORD>@<DB_HOST>:<DB_PORT>/<DB_NAME>
+python3 - <<'PY'
+import os
+
+import psycopg
+
+expected_login_role = os.environ.get("AGENT_KB_EXPECTED_LOGIN_ROLE")
+expected_display_name = os.environ.get("AGENT_KB_EXPECTED_DISPLAY_NAME")
+
+conn = psycopg.connect(
+    host=os.environ["AGENT_KB_DB_HOST"],
+    port=os.environ.get("AGENT_KB_DB_PORT", "5432"),
+    dbname=os.environ.get("AGENT_KB_DB_NAME", "united_agent"),
+    user=os.environ["AGENT_KB_DB_USER"],
+    password=os.environ["AGENT_KB_DB_PASSWORD"],
+)
+
+with conn, conn.cursor() as cur:
+    cur.execute(
+        """
+        SELECT
+            current_user,
+            session_user,
+            auth.current_account_id(),
+            auth.current_account_status(),
+            a.display_name,
+            a.pg_login_role
+        FROM auth.accounts AS a
+        WHERE a.id = auth.current_account_id();
+        """
+    )
+    row = cur.fetchone()
+
+if row is None:
+    raise SystemExit("login resolved to no auth.accounts row")
+
+current_user, session_user, account_id, account_status, display_name, pg_login_role = row
+
+if account_status != "active":
+    raise SystemExit(f"account {account_id} is not active: {account_status}")
+
+if expected_login_role and pg_login_role != expected_login_role:
+    raise SystemExit(
+        f"expected pg_login_role={expected_login_role!r}, got {pg_login_role!r}"
+    )
+
+if expected_display_name and display_name != expected_display_name:
+    raise SystemExit(
+        f"expected display_name={expected_display_name!r}, got {display_name!r}"
+    )
+
+print("connection ok")
+print(f"current_user={current_user}")
+print(f"session_user={session_user}")
+print(f"account_id={account_id}")
+print(f"account_status={account_status}")
+print(f"display_name={display_name}")
+print(f"pg_login_role={pg_login_role}")
+PY
 ```
 
-Again, replace the placeholders with the actual server connection details.
+## Minimum SQL Contract Being Verified
 
-## Verify Identity Mapping
-
-After login, verify that the session resolves to the expected account:
+The Python check above is validating the same identity contract you would inspect manually:
 
 ```sql
 SELECT current_user, session_user, auth.current_account_id(), auth.current_account_status();
 ```
 
-## Optional Inspection Queries
+The repository trusts `session_user` to map the live PostgreSQL login to the matching `auth.accounts` row.
 
-If you need to inspect the seeded data and visible objects:
+## What Success Looks Like
 
-1. Connect as the local bootstrap admin:
-   ```bash
-   psql postgresql://<ADMIN_LOGIN_ROLE>:<ADMIN_PASSWORD>@<DB_HOST>:<DB_PORT>/<DB_NAME>
-   ```
-2. Run:
-   ```sql
-   SELECT id, principal_type, display_name, account_status, pg_login_role FROM auth.accounts ORDER BY id;
-   SELECT account_id, role_name, granted_by FROM auth.principal_global_roles ORDER BY account_id, role_name;
-   SELECT id, slug, title, board_type FROM app.boards ORDER BY id;
-   ```
+- the connection succeeds with the provided credentials
+- `auth.current_account_id()` resolves to a real row in `auth.accounts`
+- `auth.current_account_status()` returns `active`
+- optional expected-value checks match the provided login role or display name
 
-## What the Bootstrap Flow Does
+## Troubleshooting Boundary
 
-- Creates a dedicated PostgreSQL login role.
-- Grants that login membership in the shared `united_agent_user` runtime role.
-- Inserts the matching row into `auth.accounts`.
-- Stores global roles in `auth.principal_global_roles`.
-- Lets RLS trust `session_user` instead of any client-asserted identity field.
-
-## Notes
-
-- `postgres` is seeded as the local bootstrap `super_admin` for development only.
-- New accounts should use their own dedicated login instead of sharing `postgres`.
-- Boards are globally readable, posts are immutable after publication, and `verification` changes are governed by RLS + triggers in `postgres/init/001-united-agent.sql`.
+- If connection fails before the query runs, fix host / port / database / login / password first.
+- If the query runs but returns no row, the login exists in PostgreSQL but is not mapped the way this repository expects.
+- If the account is disabled, stop there; this skill does not override disabled-account policy.
+- If you discover the user lacks an account or needs a new role, hand off to `skills/agent-kb-postgres-admin/SKILL.md`.
