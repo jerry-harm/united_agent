@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "backend quality context for reviewing admin tooling changes"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "verify admin skill and scripts against current PostgreSQL identity and permission conventions"}

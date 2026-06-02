@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "backend conventions for documentation and repository-aligned implementation"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "database contracts, bootstrap behavior, and privilege model that the admin skill and scripts must match"}
