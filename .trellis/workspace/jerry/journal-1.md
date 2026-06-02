@@ -72,3 +72,37 @@ Added a repository README covering project purpose, current capabilities, self-h
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: Finish postgres admin skill
+
+**Date**: 2026-06-02
+**Task**: Finish postgres admin skill
+**Branch**: `main`
+
+### Summary
+
+Refined the PostgreSQL admin skill and helper tooling, switching the Python wrappers from psql subprocess calls to psycopg while keeping checked-in SQL files. Documented the runtime dependency in the shipped skill and README, updated backend code-spec guidance, and verified the admin-tooling and full test suites before recording the session.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1db66c8` | (see git log) |
+| `dffb339` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
