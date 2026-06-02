@@ -65,10 +65,11 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
         self.assertIn("It does not cover:", content)
         self.assertIn("starting the PostgreSQL server", content)
         self.assertIn("psql postgresql://<ADMIN_LOGIN_ROLE>:<ADMIN_PASSWORD>@<DB_HOST>:<DB_PORT>/<DB_NAME>", content)
-        self.assertIn("'<NEW_LOGIN_ROLE>'", content)
-        self.assertIn("'<NEW_LOGIN_PASSWORD>'", content)
+        self.assertIn("auth.accounts", content)
+        self.assertIn("auth.principal_global_roles", content)
+        self.assertIn("auth.create_account_login", content)
         self.assertIn("psql postgresql://<NEW_LOGIN_ROLE>:<NEW_LOGIN_PASSWORD>@<DB_HOST>:<DB_PORT>/<DB_NAME>", content)
-        self.assertIn("SELECT current_user, session_user, app.current_principal_id(), app.current_business_role();", content)
+        self.assertIn("SELECT current_user, session_user, auth.current_account_id(), auth.current_account_status();", content)
 
 
 if __name__ == "__main__":

@@ -20,8 +20,10 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("super_admin can create admin", content)
         self.assertIn("super_admin can change any global role", content)
         self.assertIn("admin does not change global roles", content)
-        self.assertIn("normal_user` principals", content)
+        self.assertIn("normal_user` accounts", content)
         self.assertIn("They do not trust a user-supplied `--actor-role` flag", content)
+        self.assertIn("auth.accounts", content)
+        self.assertIn("auth.principal_global_roles", content)
         self.assertIn("scripts/create_principal.py", content)
         self.assertIn("scripts/manage_board_moderator.py", content)
         self.assertIn("scripts/sql/create_principal.sql", content)
@@ -36,9 +38,12 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("scripts/create_principal.py", content)
         self.assertIn("scripts/manage_board_moderator.py", content)
         self.assertIn("scripts/sql/create_principal.sql", content)
+        self.assertIn("auth.accounts", content)
+        self.assertIn("auth.principal_global_roles", content)
+        self.assertIn("auth.board_moderators", content)
         self.assertIn("AGENT_KB_DB_HOST", content)
         self.assertIn("AGENT_KB_DB_USER", content)
-        self.assertIn("board-moderator helper scripts only target existing `normal_user` principals", content)
+        self.assertIn("board-moderator helper scripts only target existing `normal_user` accounts", content)
         self.assertIn("not from a user-provided CLI role flag", content)
         self.assertIn("psycopg", content)
         self.assertIn('pip install "psycopg[binary]"', content)
@@ -69,16 +74,20 @@ class PostgresAdminToolingTest(unittest.TestCase):
         content = self.read_text("scripts/create_principal.py")
 
         self.assertIn("scripts/sql/create_principal.sql", content)
+        self.assertIn("--global-role", content)
         self.assertIn("AGENT_KB_NEW_PRINCIPAL_PASSWORD", content)
         self.assertIn("login role must match PostgreSQL role naming rules", content)
         self.assertIn("run_sql_file", content)
 
-    def test_create_principal_sql_uses_bootstrap_function(self) -> None:
+    def test_create_principal_sql_targets_account_and_grant_tables(self) -> None:
         content = self.read_text("scripts/sql/create_principal.sql")
 
-        self.assertIn("SELECT * FROM app.bootstrap_principal(", content)
-        self.assertIn("app.current_business_role() = 'admin'::app.business_role", content)
-        self.assertIn("admin may create only normal_user principals", content)
+        self.assertIn("INSERT INTO auth.accounts", content)
+        self.assertIn("auth.principal_global_roles", content)
+        self.assertIn("auth.create_account_login", content)
+        self.assertIn("auth.current_account_id()", content)
+        self.assertIn("auth.is_admin()", content)
+        self.assertIn("admin may create only normal_user accounts", content)
 
     def test_board_moderator_python_script_uses_sql_files(self) -> None:
         content = self.read_text("scripts/manage_board_moderator.py")
@@ -88,27 +97,31 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("scripts/sql/manage_board_moderator_list.sql", content)
         self.assertIn("run_sql_file", content)
 
+    def test_admin_skill_prefers_account_id_not_legacy_principal_id(self) -> None:
+        content = self.read_text("skills/agent-kb-postgres-admin/SKILL.md")
+
+        self.assertIn("--account-id 2", content)
+        self.assertIn("legacy compatibility alias", content)
+
     def test_board_moderator_sql_limits_actions_to_admin_levels(self) -> None:
         content = self.read_text("scripts/sql/manage_board_moderator_assign.sql")
 
+        self.assertIn("IF NOT auth.is_admin() THEN", content)
         self.assertIn(
-            "app.current_business_role() NOT IN ('admin'::app.business_role, 'super_admin'::app.business_role)",
+            "policy violation: board moderators must be existing normal_user accounts",
             content,
         )
-        self.assertIn(
-            "policy violation: board moderators must be existing normal_user principals",
-            content,
-        )
-        self.assertIn("INSERT INTO app.board_moderators", content)
-        self.assertIn("business_role = 'normal_user'", content)
+        self.assertIn("INSERT INTO auth.board_moderators", content)
+        self.assertIn("auth.principal_global_roles", content)
+        self.assertIn("role_name = 'normal_user'", content)
 
     def test_board_moderator_sql_supports_revoke_and_list(self) -> None:
         revoke = self.read_text("scripts/sql/manage_board_moderator_revoke.sql")
         listing = self.read_text("scripts/sql/manage_board_moderator_list.sql")
 
-        self.assertIn("DELETE FROM app.board_moderators", revoke)
-        self.assertIn("SELECT board_id, principal_id, granted_at, granted_by", listing)
-        self.assertIn("ORDER BY board_id, principal_id", listing)
+        self.assertIn("DELETE FROM auth.board_moderators", revoke)
+        self.assertIn("SELECT board_id, account_id, granted_at, granted_by", listing)
+        self.assertIn("ORDER BY board_id, account_id", listing)
 
 
 if __name__ == "__main__":
