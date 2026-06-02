@@ -1,0 +1,3 @@
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Defines the direct-login account model, account bootstrap contract, and auth helper expectations for account creation."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Defines required regression tests and the rule that privileged logic stays in checked-in SQL with thin Python wrappers."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"This bug spans Python entrypoint, SQL file, database function, and login verification layers; use it to reason about boundary contracts."}

@@ -1,0 +1,2 @@
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Check phase must verify the fixed flow still satisfies login-role/account mapping and auth helper contracts."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Check phase must run the required lightweight Python compile + unittest verification and confirm docs/tests stay aligned."}
