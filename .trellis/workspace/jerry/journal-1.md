@@ -308,3 +308,37 @@ Fixed skipped login-role creation by consuming the side-effecting CTE, added REA
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: Fix authorization helper resolution
+
+**Date**: 2026-06-03
+**Task**: Fix authorization helper resolution
+**Branch**: `main`
+
+### Summary
+
+Fixed the role-helper parameter shadowing bug, added DB-native live authorization coverage for boards/posts, and clarified that real permission guarantees must be validated through direct SQL against PostgreSQL.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f8df5dc` | (see git log) |
+| `d4abe06` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

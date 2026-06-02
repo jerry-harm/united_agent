@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 9
+- **Total Sessions**: 10
 - **Last Active**: 2026-06-03
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~310 | Active |
+| `journal-1.md` | ~344 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 10 | 2026-06-03 | Fix authorization helper resolution | `f8df5dc`, `d4abe06` | `main` |
 | 9 | 2026-06-03 | Fix account login creation flow | `d250c1e` | `main` |
 | 8 | 2026-06-02 | Narrow ordinary user connect skill | `b13b4a4` | `main` |
 | 7 | 2026-06-02 | Rewrite Chinese README | `c63a839` | `main` |
