@@ -209,3 +209,36 @@ Filled the Trellis backend specs with repo-grounded SQL-first, Python-wrapper, a
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: Rewrite Chinese README
+
+**Date**: 2026-06-02
+**Task**: Rewrite Chinese README
+**Branch**: `main`
+
+### Summary
+
+Rewrote README.md in Chinese to position the project as a PostgreSQL-only system without Web UI or application API, updated README contract tests, and verified the test suite.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c63a839` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
