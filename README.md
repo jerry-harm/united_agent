@@ -62,7 +62,7 @@
 - `skills/agent-kb-postgres-connect/SKILL.md`：连接到运行中实例并验证账号映射
 - `skills/agent-kb-postgres-admin/SKILL.md`：执行特权账号和版主管理工作流
 - `tests/test_agent_kb_postgres_skeleton.py` 与 `tests/test_postgres_admin_tooling.py`：校验 schema、skills、README 与脚本契约
-- `tests/test_board_post_live_flows.py`：连接已运行中的本地 PostgreSQL，验证 board / post 真实业务链路
+- `tests/test_board_post_live_flows.py`：连接已运行中的本地 PostgreSQL，以直接 SQL 为主验证 board / post 的真实权限链路
 - `.trellis/`：任务与规范工作流文件
 
 ## 启动数据库
@@ -97,7 +97,9 @@ python3 -m unittest tests.test_board_post_live_flows -v
 
 - bootstrap admin 创建 board
 - `normal_user` 发布 post
-- `normal_user` 尝试创建 board 时被 RLS 拒绝
+- `normal_user` 通过直接 SQL 尝试创建 board、写入 `auth.board_moderators`、写入 `auth.principal_global_roles` 时被 RLS 拒绝
+- `normal_user` 在未获版主授权前，通过直接 SQL 更新 `app.posts.verification` 会被数据库拒绝（可能表现为报错，也可能表现为 0 行更新）
+- 管理员只用来建立最小前置条件（例如创建测试登录账号），真正的权限结论以直接 SQL 对数据库的允许/拒绝结果为准
 
 ## 连接与验证
 

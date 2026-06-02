@@ -34,6 +34,7 @@ class LiveBoardPostFlowDocumentationTest(unittest.TestCase):
         self.assertIn("tests/test_board_post_live_flows.py", content)
         self.assertIn("python3 -m unittest tests.test_board_post_live_flows -v", content)
         self.assertIn("已经运行中的本地 PostgreSQL", content)
+        self.assertIn("直接 SQL", content)
 
 
 class LiveBoardPostFlowTest(unittest.TestCase):
@@ -58,8 +59,6 @@ class LiveBoardPostFlowTest(unittest.TestCase):
         suffix = uuid.uuid4().hex[:8]
         self.login_role = f"live_flow_{suffix}"
         self.password = f"pw_{suffix}"
-        self.grant_target_login_role = f"live_grant_{suffix}"
-        self.grant_target_password = f"pw_grant_{suffix}"
         self.board_slug = f"live-board-{suffix}"
         self.rejected_board_slug = f"live-board-denied-{suffix}"
 
@@ -67,17 +66,18 @@ class LiveBoardPostFlowTest(unittest.TestCase):
         with self.admin_connection(autocommit=True) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "DELETE FROM app.posts WHERE board_id IN (SELECT id FROM app.boards WHERE slug = %s)",
-                    (self.board_slug,),
+                    "DELETE FROM app.posts WHERE board_id IN (SELECT id FROM app.boards WHERE slug IN (%s, %s))",
+                    (self.board_slug, self.rejected_board_slug),
                 )
                 cursor.execute(
-                    "DELETE FROM auth.board_moderators WHERE board_id IN (SELECT id FROM app.boards WHERE slug = %s)",
-                    (self.board_slug,),
+                    "DELETE FROM auth.board_moderators WHERE board_id IN (SELECT id FROM app.boards WHERE slug IN (%s, %s))",
+                    (self.board_slug, self.rejected_board_slug),
                 )
-                cursor.execute("DELETE FROM app.boards WHERE slug = %s", (self.board_slug,))
-                cursor.execute("DELETE FROM auth.accounts WHERE pg_login_role = %s", (self.grant_target_login_role,))
+                cursor.execute(
+                    "DELETE FROM app.boards WHERE slug IN (%s, %s)",
+                    (self.board_slug, self.rejected_board_slug),
+                )
                 cursor.execute("DELETE FROM auth.accounts WHERE pg_login_role = %s", (self.login_role,))
-                cursor.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(self.grant_target_login_role)))
                 cursor.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(self.login_role)))
 
     def admin_connection(self, autocommit: bool = False) -> psycopg.Connection:
@@ -123,24 +123,6 @@ class LiveBoardPostFlowTest(unittest.TestCase):
             text=True,
         )
 
-    def assign_board_moderator(self, *, board_id: int, account_id: int) -> None:
-        subprocess.run(
-            [
-                "python3",
-                "scripts/manage_board_moderator.py",
-                "assign",
-                "--board-id",
-                str(board_id),
-                "--account-id",
-                str(account_id),
-            ],
-            cwd=ROOT,
-            env=self.env,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-
     def test_live_authorization_paths_match_helper_roles(self) -> None:
         with self.admin_connection() as admin_connection:
             with admin_connection.cursor() as cursor:
@@ -165,11 +147,6 @@ class LiveBoardPostFlowTest(unittest.TestCase):
             password=self.password,
             display_name="Live Flow User",
         )
-        self.create_principal(
-            login_role=self.grant_target_login_role,
-            password=self.grant_target_password,
-            display_name="Grant Target User",
-        )
 
         with self.admin_connection() as admin_connection:
             with admin_connection.cursor() as cursor:
@@ -178,23 +155,6 @@ class LiveBoardPostFlowTest(unittest.TestCase):
                     (self.login_role,),
                 )
                 normal_user_account_id = cursor.fetchone()[0]
-
-                cursor.execute(
-                    "SELECT id FROM auth.accounts WHERE pg_login_role = %s",
-                    (self.grant_target_login_role,),
-                )
-                grant_target_account_id = cursor.fetchone()[0]
-
-                cursor.execute(
-                    """
-                    INSERT INTO auth.principal_global_roles (account_id, role_name, granted_by)
-                    VALUES (%s, 'admin', auth.current_account_id())
-                    RETURNING role_name
-                    """,
-                    (grant_target_account_id,),
-                )
-                self.assertEqual(cursor.fetchone()[0], "admin")
-            admin_connection.commit()
 
         with self.principal_connection() as principal_connection:
             with principal_connection.cursor() as cursor:
@@ -282,7 +242,18 @@ class LiveBoardPostFlowTest(unittest.TestCase):
                 self.assertEqual(cursor.fetchone()[0], "progressing")
                 principal_connection.rollback()
 
-        self.assign_board_moderator(board_id=board_id, account_id=normal_user_account_id)
+        with self.admin_connection() as admin_connection:
+            with admin_connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO auth.board_moderators (board_id, account_id, granted_by)
+                    VALUES (%s, %s, auth.current_account_id())
+                    RETURNING board_id, account_id
+                    """,
+                    (board_id, normal_user_account_id),
+                )
+                self.assertEqual(cursor.fetchone(), (board_id, normal_user_account_id))
+            admin_connection.commit()
 
         with self.principal_connection() as principal_connection:
             with principal_connection.cursor() as cursor:
