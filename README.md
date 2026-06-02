@@ -2,7 +2,7 @@
 
 `united_agent` is an early PostgreSQL-backed agent knowledge base project.
 
-Right now this repository is intentionally small: it ships the database bootstrap, local self-hosting path, one distributed skill, and a test suite that protects the current skeleton. It does **not** yet ship an application server, web UI, or admin automation layer.
+Right now this repository is intentionally small: it ships the database bootstrap, local self-hosting path, distributed skills, lightweight Python admin helpers, and a test suite that protects the current skeleton. It does **not** yet ship an application server or web UI.
 
 ## What this repository currently does
 
@@ -13,7 +13,7 @@ The current MVP focuses on a direct-login PostgreSQL model for an agent knowledg
 - uses PostgreSQL Row Level Security (RLS) plus helper functions for authorization
 - maps identity from `session_user` to `app.principals.pg_login_role`
 - seeds the local `postgres` login as a development `super_admin`
-- distributes one reusable skill for connecting to a running instance and bootstrapping new principals
+- distributes reusable skills for connection and privileged admin workflows
 
 This means the project is already useful for:
 
@@ -26,9 +26,9 @@ This means the project is already useful for:
 
 Current state of the repo:
 
-- **Implemented:** PostgreSQL schema bootstrap, RLS helpers/policies, local Docker Compose setup, one connection/bootstrap skill, basic regression tests
-- **Not implemented yet:** application API, UI, automated admin tooling, packaged deployment beyond the current Compose path
-- **Planned follow-up:** an admin-oriented skill and Python helper scripts for privileged account and permission management
+- **Implemented:** PostgreSQL schema bootstrap, RLS helpers/policies, local Docker Compose setup, connection/admin skills, Python admin helper scripts, basic regression tests
+- **Not implemented yet:** application API, UI, packaged deployment beyond the current Compose path
+- **Current limitation:** safer admin policy is enforced in helper scripts, while some raw SQL paths remain more permissive underneath
 
 If you are evaluating the repo, think of it as a solid database-first skeleton rather than a finished product.
 
@@ -41,11 +41,17 @@ If you are evaluating the repo, think of it as a solid database-first skeleton r
 │   ├── data/
 │   └── init/
 │       └── 001-agent-knowledge-base.sql
+├── scripts/
+│   ├── create_principal.py
+│   └── manage_board_moderator.py
 ├── skills/
+│   ├── agent-kb-postgres-admin/
+│   │   └── SKILL.md
 │   └── agent-kb-postgres-connect/
 │       └── SKILL.md
 ├── tests/
-│   └── test_agent_kb_postgres_skeleton.py
+│   ├── test_agent_kb_postgres_skeleton.py
+│   └── test_postgres_admin_tooling.py
 └── .trellis/
 ```
 
@@ -53,8 +59,11 @@ Key paths:
 
 - `docker-compose.yaml` — current supported self-hosting path for local/dev use
 - `postgres/init/001-agent-knowledge-base.sql` — schema, helper functions, triggers, policies, and seed bootstrap principal
+- `scripts/create_principal.py` — safer wrapper around `app.bootstrap_principal(...)`
+- `scripts/manage_board_moderator.py` — helper for board-level moderator assignment management
+- `skills/agent-kb-postgres-admin/SKILL.md` — distributed skill for privileged account/moderator administration
 - `skills/agent-kb-postgres-connect/SKILL.md` — distributed skill for connecting to a running instance and creating principals from an admin session
-- `tests/test_agent_kb_postgres_skeleton.py` — smoke/regression coverage for the current skeleton
+- `tests/test_agent_kb_postgres_skeleton.py` and `tests/test_postgres_admin_tooling.py` — smoke/regression coverage for schema, skills, and helper-script contracts
 - `.trellis/` — task/spec workflow files used to manage work in this repository
 
 ## Self-hosting: current supported path
@@ -100,9 +109,10 @@ That query should resolve the session to the seeded bootstrap principal when you
 
 ## Using the distributed skill
 
-This repository currently distributes one concrete skill:
+This repository currently distributes two concrete skills:
 
 - `skills/agent-kb-postgres-connect/SKILL.md`
+- `skills/agent-kb-postgres-admin/SKILL.md`
 
 Its purpose is narrow by design: it helps a user or agent connect to an **already running** PostgreSQL-backed knowledge base, create a principal from an admin session, and verify that identity mapping works.
 
@@ -130,9 +140,9 @@ The exact installation/loading step depends on your agent tool. In this reposito
 
 ## Current account creation and permission workflow
 
-Today, account creation and permission management are **manual database-admin workflows**.
+Today, account creation and moderator assignment use lightweight Python entrypoints that execute checked-in SQL files through `psycopg`, while some higher-risk role changes remain manual database-admin workflows.
 
-That is deliberate for this stage of the project: the repository already has the database contracts, but the admin-oriented skill and Python automation are still planned work, not implemented features.
+That is deliberate for this stage of the project: the repository already has the database contracts, and the repository now adds a thin safer-operations layer instead of pretending the SQL surface itself encodes every desired policy.
 
 ### Permission model at a glance
 
@@ -147,13 +157,55 @@ There are two layers of authority in the current schema:
 Important current rules:
 
 - only `admin` and `super_admin` principals can call `app.bootstrap_principal(...)`
+- helper scripts narrow this further: `admin` creates only `normal_user`, while `super_admin` creates `admin`
+- only `super_admin` should change global business roles directly
+- board-moderator helper scripts only target existing `normal_user` principals
+- the helpers derive the actor privilege from `app.current_business_role()` inside the database, not from a user-provided CLI role flag
 - boards are globally readable
 - verification updates on posts are limited to admins or board moderators
 - review history is admin-visible only
 
+### Preferred environment-based connection setup
+
+The admin scripts prefer environment variables for database connection settings:
+
+```bash
+export AGENT_KB_DB_HOST=localhost
+export AGENT_KB_DB_PORT=5432
+export AGENT_KB_DB_NAME=agent_knowledge_base
+export AGENT_KB_DB_USER=postgres
+export AGENT_KB_DB_PASSWORD=postgres
+```
+
+Install the Python dependency first:
+
+```bash
+pip install "psycopg[binary]"
+```
+
+For principal creation you can also set:
+
+```bash
+export AGENT_KB_NEW_PRINCIPAL_PASSWORD='change-this-password'
+```
+
 ### Create a new account/principal
 
-Connect as an existing admin or the local bootstrap `postgres` account, then run:
+Preferred path:
+
+```bash
+python3 scripts/create_principal.py \
+  --principal-type human \
+  --display-name "Example Moderator" \
+  --business-role normal_user \
+  --login-role example_moderator
+```
+
+Use `--business-role admin` from a reviewed `super_admin` session when creating an admin principal.
+
+The helper enforces the safer policy from the current database session's role, not from a user-provided CLI role flag. The Python entrypoint reads `scripts/sql/create_principal.sql` and executes it through `psycopg`.
+
+Equivalent underlying SQL:
 
 ```sql
 SELECT * FROM app.bootstrap_principal(
@@ -195,7 +247,7 @@ ORDER BY id;
 
 ### Change a principal's business role
 
-Business-role changes are also manual today. From an admin session, update the principal row directly:
+Business-role changes are still manual and should be treated as a `super_admin` operation. From a reviewed super-admin session, update the principal row directly:
 
 ```sql
 UPDATE app.principals
@@ -211,11 +263,21 @@ FROM app.principals
 WHERE pg_login_role = 'example_moderator';
 ```
 
-Use the same pattern to move a principal between `normal_user`, `admin`, and `super_admin` as needed.
+Use the same pattern to move a principal between `normal_user`, `admin`, and `super_admin` as needed, but do not delegate this to `admin` operators.
 
 ### Grant board moderator access
 
-Moderator assignments are stored in `app.board_moderators`. From an admin session, grant a principal moderator access to a board:
+Preferred path:
+
+```bash
+python3 scripts/manage_board_moderator.py assign \
+  --board-id <BOARD_ID> \
+  --principal-id <PRINCIPAL_ID>
+```
+
+The helper intentionally refuses moderator assignment for `admin` or `super_admin` principals; use it only for existing `normal_user` principals. The board-moderator helper scripts only target existing `normal_user` principals and choose `scripts/sql/manage_board_moderator_assign.sql`, `scripts/sql/manage_board_moderator_revoke.sql`, or `scripts/sql/manage_board_moderator_list.sql` behind the Python wrapper, which executes them through `psycopg`.
+
+Equivalent SQL:
 
 ```sql
 INSERT INTO app.board_moderators (board_id, principal_id, granted_by)
@@ -230,7 +292,15 @@ FROM app.board_moderators
 ORDER BY board_id, principal_id;
 ```
 
-To revoke moderator access:
+To revoke moderator access, you can use:
+
+```bash
+python3 scripts/manage_board_moderator.py revoke \
+  --board-id <BOARD_ID> \
+  --principal-id <PRINCIPAL_ID>
+```
+
+Or the underlying SQL:
 
 ```sql
 DELETE FROM app.board_moderators
@@ -240,15 +310,10 @@ WHERE board_id = <BOARD_ID>
 
 ### Current limitations
 
-This manual workflow is acceptable for the current skeleton, but it is not the intended long-term admin experience.
-
-Planned follow-up work will likely add:
-
-- an admin-focused distributed skill
-- Python helper scripts for privileged account and permission operations
-- a more ergonomic operational workflow on top of the existing SQL contracts
-
-Those tools are **not** in this repository yet, so the README documents the manual path only.
+- helper scripts rely on Python plus `psycopg`, and on a reachable database instance
+- helper-script policy is intentionally stricter than the raw SQL permissions
+- there is still no dedicated helper for global role changes; keep those as reviewed `super_admin` SQL operations
+- the old shell-first wrappers are no longer the preferred path; use `scripts/create_principal.py` and `scripts/manage_board_moderator.py`
 
 ## Development and verification
 
@@ -258,7 +323,7 @@ Run the current regression tests with:
 python3 -m unittest discover -s tests -v
 ```
 
-These tests currently verify the Compose file, bootstrap SQL, helper functions/triggers, and the distributed skill content.
+These tests currently verify the Compose file, bootstrap SQL, helper functions/triggers, distributed skill content, and the helper-script policy contracts.
 
 ## Contributing notes
 

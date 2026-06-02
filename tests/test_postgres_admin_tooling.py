@@ -1,0 +1,115 @@
+from pathlib import Path
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class PostgresAdminToolingTest(unittest.TestCase):
+    def read_text(self, relative_path: str) -> str:
+        return (ROOT / relative_path).read_text(encoding="utf-8")
+
+    def assert_exists(self, relative_path: str) -> None:
+        self.assertTrue((ROOT / relative_path).exists(), relative_path)
+
+    def test_admin_skill_documents_safer_operational_policy(self) -> None:
+        content = self.read_text("skills/agent-kb-postgres-admin/SKILL.md")
+
+        self.assertIn("name: agent-kb-postgres-admin", content)
+        self.assertIn("admin can create normal_user", content)
+        self.assertIn("super_admin can create admin", content)
+        self.assertIn("super_admin can change any global role", content)
+        self.assertIn("admin does not change global roles", content)
+        self.assertIn("normal_user` principals", content)
+        self.assertIn("They do not trust a user-supplied `--actor-role` flag", content)
+        self.assertIn("scripts/create_principal.py", content)
+        self.assertIn("scripts/manage_board_moderator.py", content)
+        self.assertIn("scripts/sql/create_principal.sql", content)
+        self.assertIn("compatibility:", content)
+        self.assertIn("psycopg", content)
+        self.assertIn('pip install "psycopg[binary]"', content)
+
+    def test_readme_mentions_admin_skill_and_helper_scripts(self) -> None:
+        content = self.read_text("README.md")
+
+        self.assertIn("skills/agent-kb-postgres-admin/SKILL.md", content)
+        self.assertIn("scripts/create_principal.py", content)
+        self.assertIn("scripts/manage_board_moderator.py", content)
+        self.assertIn("scripts/sql/create_principal.sql", content)
+        self.assertIn("AGENT_KB_DB_HOST", content)
+        self.assertIn("AGENT_KB_DB_USER", content)
+        self.assertIn("board-moderator helper scripts only target existing `normal_user` principals", content)
+        self.assertIn("not from a user-provided CLI role flag", content)
+        self.assertIn("psycopg", content)
+        self.assertIn('pip install "psycopg[binary]"', content)
+
+    def test_expected_python_and_sql_files_exist(self) -> None:
+        self.assert_exists("scripts/_postgres_admin_common.py")
+        self.assert_exists("scripts/create_principal.py")
+        self.assert_exists("scripts/manage_board_moderator.py")
+        self.assert_exists("scripts/sql/create_principal.sql")
+        self.assert_exists("scripts/sql/manage_board_moderator_assign.sql")
+        self.assert_exists("scripts/sql/manage_board_moderator_revoke.sql")
+        self.assert_exists("scripts/sql/manage_board_moderator_list.sql")
+
+    def test_common_python_helper_uses_env_defaults(self) -> None:
+        content = self.read_text("scripts/_postgres_admin_common.py")
+
+        self.assertIn("AGENT_KB_DB_HOST", content)
+        self.assertIn("AGENT_KB_DB_USER", content)
+        self.assertIn("AGENT_KB_DB_PASSWORD", content)
+        self.assertIn('os.environ.get("AGENT_KB_DB_PORT", "5432")', content)
+        self.assertIn('os.environ.get("AGENT_KB_DB_NAME", "agent_knowledge_base")', content)
+        self.assertIn("import psycopg", content)
+        self.assertIn("cursor.execute", content)
+        self.assertIn("sql_path.read_text", content)
+        self.assertIn("autocommit = False", content)
+
+    def test_create_principal_python_script_uses_sql_file(self) -> None:
+        content = self.read_text("scripts/create_principal.py")
+
+        self.assertIn("scripts/sql/create_principal.sql", content)
+        self.assertIn("AGENT_KB_NEW_PRINCIPAL_PASSWORD", content)
+        self.assertIn("login role must match PostgreSQL role naming rules", content)
+        self.assertIn("run_sql_file", content)
+
+    def test_create_principal_sql_uses_bootstrap_function(self) -> None:
+        content = self.read_text("scripts/sql/create_principal.sql")
+
+        self.assertIn("SELECT * FROM app.bootstrap_principal(", content)
+        self.assertIn("app.current_business_role() = 'admin'::app.business_role", content)
+        self.assertIn("admin may create only normal_user principals", content)
+
+    def test_board_moderator_python_script_uses_sql_files(self) -> None:
+        content = self.read_text("scripts/manage_board_moderator.py")
+
+        self.assertIn("scripts/sql/manage_board_moderator_assign.sql", content)
+        self.assertIn("scripts/sql/manage_board_moderator_revoke.sql", content)
+        self.assertIn("scripts/sql/manage_board_moderator_list.sql", content)
+        self.assertIn("run_sql_file", content)
+
+    def test_board_moderator_sql_limits_actions_to_admin_levels(self) -> None:
+        content = self.read_text("scripts/sql/manage_board_moderator_assign.sql")
+
+        self.assertIn(
+            "app.current_business_role() NOT IN ('admin'::app.business_role, 'super_admin'::app.business_role)",
+            content,
+        )
+        self.assertIn(
+            "policy violation: board moderators must be existing normal_user principals",
+            content,
+        )
+        self.assertIn("INSERT INTO app.board_moderators", content)
+        self.assertIn("business_role = 'normal_user'", content)
+
+    def test_board_moderator_sql_supports_revoke_and_list(self) -> None:
+        revoke = self.read_text("scripts/sql/manage_board_moderator_revoke.sql")
+        listing = self.read_text("scripts/sql/manage_board_moderator_list.sql")
+
+        self.assertIn("DELETE FROM app.board_moderators", revoke)
+        self.assertIn("SELECT board_id, principal_id, granted_at, granted_by", listing)
+        self.assertIn("ORDER BY board_id, principal_id", listing)
+
+
+if __name__ == "__main__":
+    unittest.main()
