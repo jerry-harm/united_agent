@@ -106,3 +106,40 @@ Refined the PostgreSQL admin skill and helper tooling, switching the Python wrap
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: Archive dual schema design and tooling migration
+
+**Date**: 2026-06-02
+**Task**: Archive dual schema design and tooling migration
+**Branch**: `main`
+
+### Summary
+
+Finished the dual-schema design split and seeded two follow-up implementation tasks, then migrated management entrypoints, shipped skills, README, backend database-guidelines contracts, and regression tests to the new account/grant terminology. Verified the updated helper/docs/test surface with the full unittest suite and py_compile before archiving both completed tasks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `071013b` | (see git log) |
+| `a298200` | (see git log) |
+| `e40b92a` | (see git log) |
+| `7b36b16` | (see git log) |
+| `aa27ee9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
