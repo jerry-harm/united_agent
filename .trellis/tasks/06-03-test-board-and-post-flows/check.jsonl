@@ -1,0 +1,2 @@
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Check phase must verify the integrated board/post behavior still follows documented RLS and identity contracts."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Check phase must run the required verification commands and confirm tests are aligned with live operator behavior."}

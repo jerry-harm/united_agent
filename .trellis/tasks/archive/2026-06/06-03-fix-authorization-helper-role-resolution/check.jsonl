@@ -1,0 +1,2 @@
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Check phase must verify helper role resolution and the dependent write paths still match documented auth contracts."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Check phase must run compile/tests and confirm live integration coverage reflects the real operator workflow."}
