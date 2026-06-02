@@ -120,6 +120,82 @@ PY
 
 当你以 `postgres` 连接时，这条查询应当解析到刚刚写入的 bootstrap 账号。
 
+## 初始化后的 schema 关系图
+
+如果你要快速理解当前初始化 SQL 落下来的主表关系，可以先看下面这张图。它描述的是 `postgres/init/001-united-agent.sql` 初始化完成后的核心实体连接方式，而不是额外推测出来的应用层。
+
+```mermaid
+erDiagram
+    AUTH_ACCOUNTS ||--o{ AUTH_PRINCIPAL_GLOBAL_ROLES : grants
+    AUTH_ACCOUNTS ||--o{ AUTH_BOARD_MODERATORS : moderates
+    APP_BOARDS ||--o{ AUTH_BOARD_MODERATORS : has
+    AUTH_ACCOUNTS ||--o{ APP_BOARDS : creates
+    APP_BOARDS ||--o{ APP_POSTS : contains
+    AUTH_ACCOUNTS ||--o{ APP_POSTS : authors
+    APP_POSTS ||--o{ APP_POSTS : improves
+    APP_POSTS ||--o{ APP_REVIEW_ENTRIES : receives
+    AUTH_ACCOUNTS ||--o{ APP_REVIEW_ENTRIES : reviews
+    APP_REVIEW_ENTRIES ||--o{ APP_REVIEW_HISTORY : snapshots
+    AUTH_ACCOUNTS ||--o{ APP_REVIEW_HISTORY : replaces
+    AUTH_ACCOUNTS ||--o{ APP_TAGS : creates
+    APP_POSTS ||--o{ APP_POST_TAGS : tagged_by
+    APP_TAGS ||--o{ APP_POST_TAGS : attached_to
+
+    AUTH_ACCOUNTS {
+        bigint id PK
+        text pg_login_role UK
+        auth_principal_type principal_type
+        auth_account_status account_status
+    }
+    AUTH_PRINCIPAL_GLOBAL_ROLES {
+        bigint account_id FK
+        auth_global_role role_name
+        bigint granted_by FK
+    }
+    AUTH_BOARD_MODERATORS {
+        bigint board_id FK
+        bigint account_id FK
+        bigint granted_by FK
+    }
+    APP_BOARDS {
+        bigint id PK
+        bigint created_by FK
+        text slug UK
+        app_board_type board_type
+    }
+    APP_POSTS {
+        bigint id PK
+        bigint board_id FK
+        bigint author_id FK
+        bigint improvement_of FK
+        app_verification_state verification
+    }
+    APP_REVIEW_ENTRIES {
+        bigint id PK
+        bigint post_id FK
+        bigint account_id FK
+    }
+    APP_REVIEW_HISTORY {
+        bigint id PK
+        bigint review_entry_id FK
+        bigint replaced_by FK
+    }
+    APP_TAGS {
+        bigint id PK
+        bigint created_by FK
+        text name UK
+    }
+    APP_POST_TAGS {
+        bigint post_id FK
+        bigint tag_id FK
+    }
+```
+
+阅读这张图时有两个点尤其值得记住：
+
+- `auth.accounts.pg_login_role` 对应 PostgreSQL 真实登录名，运行时再通过 `session_user` 映射回系统账号。
+- `auth.board_moderators` 与 `auth.principal_global_roles` 是两条并行授权线：前者针对单个 board，后者针对全局角色。
+
 ## 使用分发的 skills
 
 仓库当前直接分发两个 skill：

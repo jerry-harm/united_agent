@@ -55,6 +55,21 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("不负责创建账号", content)
         self.assertIn("如果需要创建账号或管理权限，请改用 `skills/agent-kb-postgres-admin/SKILL.md`", content)
 
+    def test_readme_includes_schema_relationship_mermaid_diagram(self) -> None:
+        content = self.read_text("README.md")
+
+        self.assertIn("```mermaid", content)
+        self.assertIn("erDiagram", content)
+        self.assertIn("AUTH_ACCOUNTS", content)
+        self.assertIn("AUTH_PRINCIPAL_GLOBAL_ROLES", content)
+        self.assertIn("AUTH_BOARD_MODERATORS", content)
+        self.assertIn("APP_BOARDS", content)
+        self.assertIn("APP_POSTS", content)
+        self.assertIn("APP_REVIEW_ENTRIES", content)
+        self.assertIn("APP_REVIEW_HISTORY", content)
+        self.assertIn("APP_TAGS", content)
+        self.assertIn("APP_POST_TAGS", content)
+
     def test_expected_python_and_sql_files_exist(self) -> None:
         self.assert_exists("scripts/_postgres_admin_common.py")
         self.assert_exists("scripts/create_principal.py")
@@ -96,6 +111,12 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("auth.can_write()", content)
         self.assertIn("auth.is_admin()", content)
         self.assertIn("admin may create only normal_user accounts", content)
+
+    def test_create_principal_sql_consumes_created_login_cte(self) -> None:
+        content = self.read_text("scripts/sql/create_principal.sql")
+
+        self.assertIn("created_login AS", content)
+        self.assertRegex(content, r"FROM\s+created_account,\s*created_login")
 
     def test_board_moderator_python_script_uses_sql_files(self) -> None:
         content = self.read_text("scripts/manage_board_moderator.py")

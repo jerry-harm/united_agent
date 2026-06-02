@@ -108,6 +108,7 @@ SELECT id FROM auth.accounts WHERE pg_login_role = session_user;
   - SQL files should keep placeholder tokens in the `{{name}}` form so the Python wrapper can render safe SQL literals before execution.
   - Helper SQL must derive actor privilege from `auth` helper functions and grant tables inside the database.
   - Helpers must not accept or trust a user-supplied actor-role override.
+  - If a helper SQL file uses a side-effecting CTE, the final statement must consume that CTE so PostgreSQL cannot skip the side effect during execution.
 
 ### 4. Validation & Error Matrix
 - missing required DB env var -> exit with `missing required environment variable: <NAME>`
@@ -129,6 +130,7 @@ SELECT id FROM auth.accounts WHERE pg_login_role = session_user;
   - the shared runner uses env defaults for port/name
   - the shared runner imports `psycopg`, reads SQL files from disk, and executes them through a cursor
   - account creation SQL targets `auth.accounts` and `auth.principal_global_roles`
+  - account creation SQL consumes the login-creation CTE so `auth.create_account_login(...)` cannot be optimized away
   - moderator assignment SQL still restricts targets to existing `normal_user` accounts
 
 ### 7. Wrong vs Correct
@@ -194,3 +196,13 @@ with psycopg.connect(...) as connection:
 **Fix**: Add `auth.can_write()` to every privileged helper entrypoint and every write-capable RLS `USING` / `WITH CHECK` branch.
 
 **Prevention**: Keep static tests that search the bootstrap SQL and admin helper SQL for `auth.can_write()` alongside role-based authorization checks.
+
+### Common Mistake: Leaving a side-effecting CTE unreferenced
+
+**Symptom**: A helper SQL file inserts application rows successfully, but the expected PostgreSQL-side side effect, such as login-role creation, never happens.
+
+**Cause**: PostgreSQL may skip a CTE whose result is never consumed by the final statement, even if the CTE body calls a side-effecting function.
+
+**Fix**: Make the downstream statement reference the side-effecting CTE explicitly, for example `FROM created_account, created_login`.
+
+**Prevention**: Keep a regression test that checks the helper SQL still consumes the side-effecting CTE.

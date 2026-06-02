@@ -27,7 +27,7 @@ created_login AS (
 granted_role AS (
   INSERT INTO auth.principal_global_roles (account_id, role_name, granted_by)
   SELECT created_account.id, {{global_role}}, auth.current_account_id()
-  FROM created_account
+  FROM created_account, created_login
   ON CONFLICT (account_id, role_name) DO NOTHING
 )
 SELECT id, principal_type, display_name, pg_login_role, account_status

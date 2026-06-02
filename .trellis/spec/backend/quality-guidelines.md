@@ -39,6 +39,7 @@ There is no dedicated lint config or type-checker config in the repo yet. Curren
   - helper SQL files
   - admin scripts
   - README or shipped skill contracts that tests assert on
+- Keep operator-facing schema diagrams in `README.md` aligned with `postgres/init/001-united-agent.sql`, and protect them with explicit README assertions when they are introduced or changed.
 
 ---
 
