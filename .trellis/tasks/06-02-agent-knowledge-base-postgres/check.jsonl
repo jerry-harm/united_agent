@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "backend development conventions and quality standards for review"}
+{"file": ".trellis/tasks/06-02-agent-knowledge-base-postgres/info.md", "reason": "technical design for verifying schema, RLS, and authorization correctness"}

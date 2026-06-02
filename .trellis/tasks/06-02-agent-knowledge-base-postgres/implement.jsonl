@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "backend development conventions and quality guidelines for the PostgreSQL schema design"}
+{"file": ".trellis/tasks/06-02-agent-knowledge-base-postgres/info.md", "reason": "technical design with MVP schema, authorization model, RLS sketch, and operation matrix"}
