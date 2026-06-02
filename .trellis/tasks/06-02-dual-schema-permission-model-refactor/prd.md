@@ -40,10 +40,14 @@ Implement the first execution phase of the dual-schema design by moving identity
 * Prefer relation/grant tables for authorization over direct role columns.
 * Make write eligibility depend on centralized helper logic via `auth.can_write()`.
 * Accept destructive bootstrap reset for MVP development.
+* Keep outer bootstrap/runtime naming consistent with the dual-schema refactor instead of leaving legacy database/service naming around the new model.
+* Keep `postgres` as the operational bootstrap account; do not rename the superuser/operational role in this task.
+* Rename the local development database/service naming to project-consistent names, with `POSTGRES_DB=united_agent` and container/runtime naming aligned to `united-agent-postgres`.
 
 ## Expected Files/Areas
 
-* `postgres/init/001-agent-knowledge-base.sql`
+* `postgres/init/001-united-agent.sql` (renamed from `001-agent-knowledge-base.sql`)
+* `docker-compose.yaml`
 * schema/RLS regression tests
 * any SQL/bootstrap verification fixtures directly tied to the schema refactor
 
@@ -55,8 +59,20 @@ Implement the first execution phase of the dual-schema design by moving identity
 * [ ] Board moderator grants live under `auth`.
 * [ ] RLS uses the new helper set, including `auth.can_write()`.
 * [ ] `FORCE RLS`, `public` tightening, and helper `search_path` tightening are included.
+* [ ] Local bootstrap naming is updated where needed so database/runtime naming matches the refactored model.
+* [ ] Operational access still works through the default `postgres` bootstrap account.
+* [ ] Local database bootstrap targets `united_agent` consistently.
+* [ ] The init SQL file/path naming is updated to remove the old `agent-knowledge-base` wording.
 * [ ] Verification coverage is updated for the new schema and helper contracts.
 
 ## Notes
 
-This task is intentionally schema-first. It owns schema/bootstrap/RLS/helper-contract changes plus database-facing verification for those contracts. Operational entrypoints, docs wording migration, and broader documentation cleanup belong to the follow-up task `.trellis/tasks/06-02-management-entrypoints-docs-migration/`.
+This task is intentionally schema-first. It owns schema/bootstrap/RLS/helper-contract changes plus database-facing verification for those contracts. It also absorbs the local bootstrap naming cleanup needed to keep the dev environment aligned with the new auth/app model. Operational entrypoints, docs wording migration, and broader documentation cleanup belong to the follow-up task `.trellis/tasks/06-02-management-entrypoints-docs-migration/`.
+
+## Decision (ADR-lite)
+
+**Context**: The dual-schema refactor updates the internal data model from a single-schema knowledge-base bootstrap to an `auth` + `app` split. Leaving old outer naming would preserve avoidable mismatch between runtime/bootstrap surfaces and the new model.
+
+**Decision**: Keep `postgres` as the operational bootstrap account, but rename local development naming around it to project-consistent names: database `united_agent`, container/runtime naming aligned to `united-agent-postgres`, and the init SQL file renamed to `postgres/init/001-united-agent.sql`.
+
+**Consequences**: The refactor touches compose/bootstrap/test references in the same task, but finishes with one coherent naming scheme and no lingering `agent-knowledge-base` bootstrap label.

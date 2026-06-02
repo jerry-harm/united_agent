@@ -1,14 +1,14 @@
 DO $$
 BEGIN
-  IF auth.is_admin()
+  IF NOT auth.can_write() OR NOT auth.is_admin() THEN
+    RAISE EXCEPTION 'policy violation: only admin or super_admin may create accounts';
+  ELSIF auth.is_admin()
      AND NOT auth.is_super_admin()
      AND {{global_role}} <> 'normal_user' THEN
     RAISE EXCEPTION 'policy violation: admin may create only normal_user accounts';
   ELSIF auth.is_super_admin()
      AND {{global_role}} NOT IN ('normal_user', 'admin') THEN
     RAISE EXCEPTION 'policy violation: super_admin may create only normal_user or admin accounts';
-  ELSIF NOT auth.is_admin() THEN
-    RAISE EXCEPTION 'policy violation: only admin or super_admin may create accounts';
   END IF;
 END
 $$;

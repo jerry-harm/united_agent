@@ -1,10 +1,10 @@
 services:
   postgres:
     image: postgres:16
-    container_name: agent-kb-postgres
+    container_name: united-agent-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: agent_knowledge_base
+      POSTGRES_DB: united_agent
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
@@ -13,7 +13,7 @@ services:
       - ./postgres/data/db:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d agent_knowledge_base"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d united_agent"]
       interval: 10s
       timeout: 5s
       retries: 5

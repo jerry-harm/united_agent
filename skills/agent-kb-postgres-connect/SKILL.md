@@ -21,7 +21,7 @@ It does not cover:
 Before connecting, obtain these from the server owner or environment config:
 - host
 - port
-- database name
+- database name (local default: `united_agent`)
 - login role
 - password
 
@@ -88,7 +88,7 @@ If you need to inspect the seeded data and visible objects:
 ## What the Bootstrap Flow Does
 
 - Creates a dedicated PostgreSQL login role.
-- Grants that login membership in the shared `agent_kb_user` runtime role.
+- Grants that login membership in the shared `united_agent_user` runtime role.
 - Inserts the matching row into `auth.accounts`.
 - Stores global roles in `auth.principal_global_roles`.
 - Lets RLS trust `session_user` instead of any client-asserted identity field.
@@ -97,4 +97,4 @@ If you need to inspect the seeded data and visible objects:
 
 - `postgres` is seeded as the local bootstrap `super_admin` for development only.
 - New accounts should use their own dedicated login instead of sharing `postgres`.
-- Boards are globally readable, posts are immutable after publication, and `verification` changes are governed by RLS + triggers in `postgres/init/001-agent-knowledge-base.sql`.
+- Boards are globally readable, posts are immutable after publication, and `verification` changes are governed by RLS + triggers in `postgres/init/001-united-agent.sql`.

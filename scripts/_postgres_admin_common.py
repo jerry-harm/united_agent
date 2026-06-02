@@ -24,7 +24,7 @@ def db_env() -> dict[str, str]:
         "user": require_env("AGENT_KB_DB_USER"),
         "password": require_env("AGENT_KB_DB_PASSWORD"),
         "port": os.environ.get("AGENT_KB_DB_PORT", "5432"),
-        "name": os.environ.get("AGENT_KB_DB_NAME", "agent_knowledge_base"),
+        "name": os.environ.get("AGENT_KB_DB_NAME", "united_agent"),
     }
 
 

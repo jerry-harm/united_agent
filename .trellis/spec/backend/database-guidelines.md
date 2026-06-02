@@ -6,7 +6,7 @@
 
 ## Overview
 
-The current MVP uses PostgreSQL directly, with schema bootstrap defined in `postgres/init/001-agent-knowledge-base.sql`.
+The current MVP uses PostgreSQL directly, with schema bootstrap defined in `postgres/init/001-united-agent.sql`.
 
 Current conventions:
 - Put business-content tables and functions under the `app` schema and identity/authorization tables and helpers under `auth`.
@@ -36,9 +36,10 @@ Current conventions:
 - Database login is the source of truth for identity.
 - `auth.accounts.pg_login_role` must map 1:1 to the authenticated PostgreSQL session login.
 - Helper functions must resolve identity from `session_user`, not a mutable runtime role, so `SET ROLE` or inherited grants do not corrupt account resolution.
+- Any privileged helper or write-capable RLS path must gate on `auth.can_write()` in addition to role checks, so disabled accounts cannot keep mutating state through inherited admin or moderator grants.
 - New account bootstrap must:
   - create a PostgreSQL login role
-  - grant membership in shared runtime role `agent_kb_user`
+  - grant membership in shared runtime role `united_agent_user`
   - insert the matching row into `auth.accounts`
   - insert the selected global role into `auth.principal_global_roles`
 
@@ -47,16 +48,19 @@ Current conventions:
 - empty password -> raise `password must not be empty`
 - existing PostgreSQL role -> raise `role <name> already exists`
 - caller without `admin` or `super_admin` -> raise `only admin or super_admin may create accounts`
+- disabled account hitting privileged helper or write-capable RLS path -> deny via `auth.can_write()` before role-only checks can authorize the action
 
 ### 5. Good/Base/Bad Cases
 - Good: login as `postgres`, create an `auth.accounts` row plus matching `auth.principal_global_roles` grant for `review_bot`, then reconnect as `review_bot` and `auth.current_account_status()` resolves successfully.
 - Base: login as bootstrap admin and query globally readable tables like `app.boards`.
 - Bad: resolve current account via `current_user`; this breaks once runtime role switching or inherited grants are involved.
+- Bad: allow a disabled `admin` or board moderator account to pass role checks and still mutate rows because the policy/helper forgot to include `auth.can_write()`.
 
 ### 6. Tests Required
 - Schema smoke test must prove:
   - the `auth` helper set exists
   - reconnecting as a bootstrapped account resolves the expected account id and account status
+- Static schema test must prove privileged helpers and write-capable RLS policies include `auth.can_write()` wherever role checks authorize mutation.
 - Static test must assert that identity helpers are implemented against `session_user`.
 - Trigger test must assert the review history trigger helper is `SECURITY DEFINER`.
 
@@ -95,7 +99,7 @@ SELECT id FROM auth.accounts WHERE pg_login_role = session_user;
   - `AGENT_KB_DB_PASSWORD`
 - Optional environment keys:
   - `AGENT_KB_DB_PORT` (default `5432`)
-  - `AGENT_KB_DB_NAME` (default `agent_knowledge_base`)
+  - `AGENT_KB_DB_NAME` (default `united_agent`)
   - `AGENT_KB_NEW_PRINCIPAL_PASSWORD` (used by `create_principal.py`)
 - Runtime dependency:
   - Python environment with `psycopg` installed (recommended install command: `pip install "psycopg[binary]"`)
@@ -180,3 +184,13 @@ with psycopg.connect(...) as connection:
 **Fix**: Resolve account identity from `session_user` and map that login to `auth.accounts.pg_login_role`.
 
 **Prevention**: Keep a regression test that checks the SQL source still references `session_user`.
+
+### Common Mistake: Checking role grants without `auth.can_write()`
+
+**Symptom**: Disabled accounts can still create logins, manage moderators, or update rows because they retain `admin`, `super_admin`, or moderator grants.
+
+**Cause**: Helpers or RLS policies gate only on `auth.is_admin()`, `auth.is_super_admin()`, or `auth.is_board_moderator(...)` and forget the centralized write-eligibility helper.
+
+**Fix**: Add `auth.can_write()` to every privileged helper entrypoint and every write-capable RLS `USING` / `WITH CHECK` branch.
+
+**Prevention**: Keep static tests that search the bootstrap SQL and admin helper SQL for `auth.can_write()` alongside role-based authorization checks.

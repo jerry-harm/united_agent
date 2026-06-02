@@ -50,7 +50,7 @@ Stated plainly: super_admin can change any global role, admin does not change gl
 Optional:
 
 - `AGENT_KB_DB_PORT` (default `5432`)
-- `AGENT_KB_DB_NAME` (default `agent_knowledge_base`)
+- `AGENT_KB_DB_NAME` (default `united_agent`)
 - `AGENT_KB_NEW_PRINCIPAL_PASSWORD` for new-account creation
 
 ## Create An Account

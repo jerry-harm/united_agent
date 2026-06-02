@@ -64,7 +64,7 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("AGENT_KB_DB_USER", content)
         self.assertIn("AGENT_KB_DB_PASSWORD", content)
         self.assertIn('os.environ.get("AGENT_KB_DB_PORT", "5432")', content)
-        self.assertIn('os.environ.get("AGENT_KB_DB_NAME", "agent_knowledge_base")', content)
+        self.assertIn('os.environ.get("AGENT_KB_DB_NAME", "united_agent")', content)
         self.assertIn("import psycopg", content)
         self.assertIn("cursor.execute", content)
         self.assertIn("sql_path.read_text", content)
@@ -86,6 +86,7 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("auth.principal_global_roles", content)
         self.assertIn("auth.create_account_login", content)
         self.assertIn("auth.current_account_id()", content)
+        self.assertIn("auth.can_write()", content)
         self.assertIn("auth.is_admin()", content)
         self.assertIn("admin may create only normal_user accounts", content)
 
@@ -106,7 +107,8 @@ class PostgresAdminToolingTest(unittest.TestCase):
     def test_board_moderator_sql_limits_actions_to_admin_levels(self) -> None:
         content = self.read_text("scripts/sql/manage_board_moderator_assign.sql")
 
-        self.assertIn("IF NOT auth.is_admin() THEN", content)
+        self.assertIn("auth.can_write()", content)
+        self.assertIn("IF NOT auth.can_write() OR NOT auth.is_admin() THEN", content)
         self.assertIn(
             "policy violation: board moderators must be existing normal_user accounts",
             content,
@@ -119,6 +121,7 @@ class PostgresAdminToolingTest(unittest.TestCase):
         revoke = self.read_text("scripts/sql/manage_board_moderator_revoke.sql")
         listing = self.read_text("scripts/sql/manage_board_moderator_list.sql")
 
+        self.assertIn("auth.can_write()", revoke)
         self.assertIn("DELETE FROM auth.board_moderators", revoke)
         self.assertIn("SELECT board_id, account_id, granted_at, granted_by", listing)
         self.assertIn("ORDER BY board_id, account_id", listing)

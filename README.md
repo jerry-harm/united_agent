@@ -8,7 +8,7 @@ Right now this repository is intentionally small: it ships the database bootstra
 
 The current MVP focuses on a direct-login PostgreSQL model for an agent knowledge base:
 
-- bootstraps split `auth` and `app` schemas from `postgres/init/001-agent-knowledge-base.sql`
+- bootstraps split `auth` and `app` schemas from `postgres/init/001-united-agent.sql`
 - keeps identity and authorization in `auth.accounts`, `auth.principal_global_roles`, and `auth.board_moderators`
 - uses PostgreSQL Row Level Security (RLS) plus helper functions for authorization
 - maps identity from `session_user` to the authenticated account login
@@ -40,7 +40,7 @@ If you are evaluating the repo, think of it as a solid database-first skeleton r
 ├── postgres/
 │   ├── data/
 │   └── init/
-│       └── 001-agent-knowledge-base.sql
+│       └── 001-united-agent.sql
 ├── scripts/
 │   ├── create_principal.py
 │   └── manage_board_moderator.py
@@ -58,7 +58,7 @@ If you are evaluating the repo, think of it as a solid database-first skeleton r
 Key paths:
 
 - `docker-compose.yaml` — current supported self-hosting path for local/dev use
-- `postgres/init/001-agent-knowledge-base.sql` — schema, helper functions, triggers, policies, and seed bootstrap account
+- `postgres/init/001-united-agent.sql` — schema, helper functions, triggers, policies, and seed bootstrap account
 - `scripts/create_principal.py` — safer wrapper around the checked-in account/bootstrap SQL flow
 - `scripts/manage_board_moderator.py` — helper for board-level moderator assignment management
 - `skills/agent-kb-postgres-admin/SKILL.md` — distributed skill for privileged account/moderator administration
@@ -78,19 +78,19 @@ docker compose up -d
 
 This starts a single PostgreSQL container with:
 
-- database: `agent_knowledge_base`
+- database: `united_agent`
 - admin login: `postgres`
 - admin password: `postgres`
 - exposed port: `5432`
 
 The init script is mounted from `./postgres/init`, and the database files persist under `./postgres/data/db`.
 
-Because PostgreSQL init scripts run only when the data directory is first initialized, changes to `postgres/init/001-agent-knowledge-base.sql` will not be re-applied to an existing `./postgres/data/db` automatically.
+Because PostgreSQL init scripts run only when the data directory is first initialized, changes to `postgres/init/001-united-agent.sql` will not be re-applied to an existing `./postgres/data/db` automatically.
 
 ### Connect locally
 
 ```bash
-psql postgresql://postgres:postgres@localhost:5432/agent_knowledge_base
+psql postgresql://postgres:postgres@localhost:5432/united_agent
 ```
 
 After startup, the init SQL creates the schema and inserts a local bootstrap account:
@@ -172,7 +172,7 @@ The admin scripts prefer environment variables for database connection settings:
 ```bash
 export AGENT_KB_DB_HOST=localhost
 export AGENT_KB_DB_PORT=5432
-export AGENT_KB_DB_NAME=agent_knowledge_base
+export AGENT_KB_DB_NAME=united_agent
 export AGENT_KB_DB_USER=postgres
 export AGENT_KB_DB_PASSWORD=postgres
 ```
@@ -220,14 +220,14 @@ VALUES (<ACCOUNT_ID>, 'normal_user', auth.current_account_id());
 What this does:
 
 - creates a dedicated PostgreSQL login role
-- grants that login membership in `agent_kb_user`
+- grants that login membership in `united_agent_user`
 - inserts the matching row into `auth.accounts`
 - records the selected global role in `auth.principal_global_roles`
 
 Reconnect as that new login to confirm the mapping:
 
 ```bash
-psql postgresql://example_moderator:change-this-password@localhost:5432/agent_knowledge_base
+psql postgresql://example_moderator:change-this-password@localhost:5432/united_agent
 ```
 
 Then verify:
