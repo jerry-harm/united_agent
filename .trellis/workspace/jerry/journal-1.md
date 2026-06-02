@@ -39,3 +39,36 @@ Added a PostgreSQL-backed agent knowledge base skeleton with RLS, bootstrap SQL,
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: project readme
+
+**Date**: 2026-06-02
+**Task**: project readme
+**Branch**: `main`
+
+### Summary
+
+Added a repository README covering project purpose, current capabilities, self-hosting, skill usage, repository structure, and the current manual account and permission management workflow.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b8cedd4` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
