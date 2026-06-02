@@ -176,3 +176,36 @@ Implemented the auth/app bootstrap split, unified local PostgreSQL naming to uni
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: bootstrap project development guidelines
+
+**Date**: 2026-06-02
+**Task**: bootstrap project development guidelines
+**Branch**: `main`
+
+### Summary
+
+Filled the Trellis backend specs with repo-grounded SQL-first, Python-wrapper, and unittest conventions, marked frontend specs as not yet implemented instead of inventing patterns, and completed the bootstrap guidelines task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `74a6ee1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

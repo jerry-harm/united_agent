@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 5
+- **Total Sessions**: 6
 - **Last Active**: 2026-06-02
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~178 | Active |
+| `journal-1.md` | ~211 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 6 | 2026-06-02 | bootstrap project development guidelines | `74a6ee1` | `main` |
 | 5 | 2026-06-02 | dual schema permission model refactor | `9855363` | `main` |
 | 4 | 2026-06-02 | Archive dual schema design and tooling migration | `071013b`, `a298200`, `e40b92a`, `7b36b16`, `aa27ee9` | `main` |
 | 3 | 2026-06-02 | Finish postgres admin skill | `1db66c8`, `dffb339` | `main` |
