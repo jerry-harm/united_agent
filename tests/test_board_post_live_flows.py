@@ -1,0 +1,304 @@
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import subprocess
+import unittest
+import uuid
+
+try:
+    import psycopg
+    from psycopg import sql
+except ModuleNotFoundError:  # pragma: no cover - environment-dependent
+    psycopg = None
+    sql = None
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def live_db_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.setdefault("AGENT_KB_DB_HOST", "localhost")
+    env.setdefault("AGENT_KB_DB_PORT", "5432")
+    env.setdefault("AGENT_KB_DB_NAME", "united_agent")
+    env.setdefault("AGENT_KB_DB_USER", "postgres")
+    env.setdefault("AGENT_KB_DB_PASSWORD", "postgres")
+    return env
+
+
+class LiveBoardPostFlowDocumentationTest(unittest.TestCase):
+    def test_readme_documents_live_board_post_flow_test(self) -> None:
+        content = (ROOT / "README.md").read_text(encoding="utf-8")
+
+        self.assertIn("tests/test_board_post_live_flows.py", content)
+        self.assertIn("python3 -m unittest tests.test_board_post_live_flows -v", content)
+        self.assertIn("已经运行中的本地 PostgreSQL", content)
+
+
+class LiveBoardPostFlowTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        if psycopg is None:
+            raise unittest.SkipTest('psycopg is required for live PostgreSQL integration tests; install with pip install "psycopg[binary]"')
+        cls.env = live_db_env()
+        try:
+            with psycopg.connect(
+                host=cls.env["AGENT_KB_DB_HOST"],
+                port=cls.env["AGENT_KB_DB_PORT"],
+                dbname=cls.env["AGENT_KB_DB_NAME"],
+                user=cls.env["AGENT_KB_DB_USER"],
+                password=cls.env["AGENT_KB_DB_PASSWORD"],
+            ):
+                pass
+        except psycopg.Error as exc:
+            raise unittest.SkipTest(f"live PostgreSQL is required for this test: {exc}") from exc
+
+    def setUp(self) -> None:
+        suffix = uuid.uuid4().hex[:8]
+        self.login_role = f"live_flow_{suffix}"
+        self.password = f"pw_{suffix}"
+        self.grant_target_login_role = f"live_grant_{suffix}"
+        self.grant_target_password = f"pw_grant_{suffix}"
+        self.board_slug = f"live-board-{suffix}"
+        self.rejected_board_slug = f"live-board-denied-{suffix}"
+
+    def tearDown(self) -> None:
+        with self.admin_connection(autocommit=True) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "DELETE FROM app.posts WHERE board_id IN (SELECT id FROM app.boards WHERE slug = %s)",
+                    (self.board_slug,),
+                )
+                cursor.execute(
+                    "DELETE FROM auth.board_moderators WHERE board_id IN (SELECT id FROM app.boards WHERE slug = %s)",
+                    (self.board_slug,),
+                )
+                cursor.execute("DELETE FROM app.boards WHERE slug = %s", (self.board_slug,))
+                cursor.execute("DELETE FROM auth.accounts WHERE pg_login_role = %s", (self.grant_target_login_role,))
+                cursor.execute("DELETE FROM auth.accounts WHERE pg_login_role = %s", (self.login_role,))
+                cursor.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(self.grant_target_login_role)))
+                cursor.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(self.login_role)))
+
+    def admin_connection(self, autocommit: bool = False) -> psycopg.Connection:
+        connection = psycopg.connect(
+            host=self.env["AGENT_KB_DB_HOST"],
+            port=self.env["AGENT_KB_DB_PORT"],
+            dbname=self.env["AGENT_KB_DB_NAME"],
+            user=self.env["AGENT_KB_DB_USER"],
+            password=self.env["AGENT_KB_DB_PASSWORD"],
+        )
+        connection.autocommit = autocommit
+        return connection
+
+    def principal_connection(self) -> psycopg.Connection:
+        return psycopg.connect(
+            host=self.env["AGENT_KB_DB_HOST"],
+            port=self.env["AGENT_KB_DB_PORT"],
+            dbname=self.env["AGENT_KB_DB_NAME"],
+            user=self.login_role,
+            password=self.password,
+        )
+
+    def create_principal(self, *, login_role: str, password: str, display_name: str, global_role: str = "normal_user") -> None:
+        subprocess.run(
+            [
+                "python3",
+                "scripts/create_principal.py",
+                "--principal-type",
+                "human",
+                "--display-name",
+                display_name,
+                "--global-role",
+                global_role,
+                "--login-role",
+                login_role,
+                "--new-password",
+                password,
+            ],
+            cwd=ROOT,
+            env=self.env,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    def assign_board_moderator(self, *, board_id: int, account_id: int) -> None:
+        subprocess.run(
+            [
+                "python3",
+                "scripts/manage_board_moderator.py",
+                "assign",
+                "--board-id",
+                str(board_id),
+                "--account-id",
+                str(account_id),
+            ],
+            cwd=ROOT,
+            env=self.env,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    def test_live_authorization_paths_match_helper_roles(self) -> None:
+        with self.admin_connection() as admin_connection:
+            with admin_connection.cursor() as cursor:
+                cursor.execute("SELECT auth.current_account_id()")
+                admin_account_id = cursor.fetchone()[0]
+
+                cursor.execute(
+                    """
+                    INSERT INTO app.boards (slug, title, description, board_type, created_by)
+                    VALUES (%s, %s, %s, 'discussion', auth.current_account_id())
+                    RETURNING id, created_by
+                    """,
+                    (self.board_slug, "Live Flow Board", "integration test board"),
+                )
+                board_id, created_by = cursor.fetchone()
+                self.assertEqual(created_by, admin_account_id)
+
+            admin_connection.commit()
+
+        self.create_principal(
+            login_role=self.login_role,
+            password=self.password,
+            display_name="Live Flow User",
+        )
+        self.create_principal(
+            login_role=self.grant_target_login_role,
+            password=self.grant_target_password,
+            display_name="Grant Target User",
+        )
+
+        with self.admin_connection() as admin_connection:
+            with admin_connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT id FROM auth.accounts WHERE pg_login_role = %s",
+                    (self.login_role,),
+                )
+                normal_user_account_id = cursor.fetchone()[0]
+
+                cursor.execute(
+                    "SELECT id FROM auth.accounts WHERE pg_login_role = %s",
+                    (self.grant_target_login_role,),
+                )
+                grant_target_account_id = cursor.fetchone()[0]
+
+                cursor.execute(
+                    """
+                    INSERT INTO auth.principal_global_roles (account_id, role_name, granted_by)
+                    VALUES (%s, 'admin', auth.current_account_id())
+                    RETURNING role_name
+                    """,
+                    (grant_target_account_id,),
+                )
+                self.assertEqual(cursor.fetchone()[0], "admin")
+            admin_connection.commit()
+
+        with self.principal_connection() as principal_connection:
+            with principal_connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT auth.current_account_id(), auth.is_admin(), auth.is_super_admin(), auth.can_write()"
+                )
+                account_id, is_admin, is_super_admin, can_write = cursor.fetchone()
+                self.assertEqual(account_id, normal_user_account_id)
+                self.assertFalse(is_admin)
+                self.assertFalse(is_super_admin)
+                self.assertTrue(can_write)
+
+                cursor.execute(
+                    """
+                    INSERT INTO app.posts (board_id, author_id, content_type, title, body)
+                    VALUES (%s, auth.current_account_id(), %s, %s, %s)
+                    RETURNING id, author_id, verification
+                    """,
+                    (board_id, "text/plain", "Live Flow Post", "post body from integration test"),
+                )
+                post_id, author_id, verification = cursor.fetchone()
+                self.assertEqual(author_id, normal_user_account_id)
+                self.assertEqual(verification, "progressing")
+            principal_connection.commit()
+
+        with self.principal_connection() as principal_connection:
+            with principal_connection.cursor() as cursor:
+                with self.assertRaises(psycopg.Error) as excinfo:
+                    cursor.execute(
+                        """
+                        INSERT INTO app.boards (slug, title, description, board_type, created_by)
+                        VALUES (%s, %s, %s, 'discussion', auth.current_account_id())
+                        """,
+                        (
+                            self.rejected_board_slug,
+                            "Denied Board",
+                            "normal user should not create boards",
+                        ),
+                    )
+
+                self.assertIn("row-level security", str(excinfo.exception).lower())
+                principal_connection.rollback()
+
+        with self.principal_connection() as principal_connection:
+            with principal_connection.cursor() as cursor:
+                with self.assertRaises(psycopg.Error) as excinfo:
+                    cursor.execute(
+                        """
+                        INSERT INTO auth.board_moderators (board_id, account_id, granted_by)
+                        VALUES (%s, auth.current_account_id(), auth.current_account_id())
+                        """,
+                        (board_id,),
+                    )
+
+                self.assertIn("row-level security", str(excinfo.exception).lower())
+                principal_connection.rollback()
+
+        with self.principal_connection() as principal_connection:
+            with principal_connection.cursor() as cursor:
+                with self.assertRaises(psycopg.Error) as excinfo:
+                    cursor.execute(
+                        """
+                        INSERT INTO auth.principal_global_roles (account_id, role_name, granted_by)
+                        VALUES (auth.current_account_id(), 'admin', auth.current_account_id())
+                        """
+                    )
+
+                self.assertIn("row-level security", str(excinfo.exception).lower())
+                principal_connection.rollback()
+
+        with self.principal_connection() as principal_connection:
+            with principal_connection.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE app.posts SET verification = 'verified' WHERE id = %s RETURNING verification",
+                    (post_id,),
+                )
+
+                self.assertEqual(cursor.rowcount, 0)
+                self.assertIsNone(cursor.fetchone())
+
+                cursor.execute(
+                    "SELECT verification FROM app.posts WHERE id = %s",
+                    (post_id,),
+                )
+                self.assertEqual(cursor.fetchone()[0], "progressing")
+                principal_connection.rollback()
+
+        self.assign_board_moderator(board_id=board_id, account_id=normal_user_account_id)
+
+        with self.principal_connection() as principal_connection:
+            with principal_connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT auth.is_board_moderator(%s)",
+                    (board_id,),
+                )
+                self.assertTrue(cursor.fetchone()[0])
+
+                cursor.execute(
+                    "UPDATE app.posts SET verification = 'verified' WHERE id = %s RETURNING verification",
+                    (post_id,),
+                )
+                self.assertEqual(cursor.fetchone()[0], "verified")
+            principal_connection.commit()
+
+
+if __name__ == "__main__":
+    unittest.main()

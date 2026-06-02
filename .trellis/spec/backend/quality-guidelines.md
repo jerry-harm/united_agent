@@ -63,6 +63,7 @@ When changing authorization logic, ensure tests still prove:
 - `auth.can_write()` gates write-capable flows
 - `session_user` remains the identity source
 - helper scripts still use checked-in SQL files
+- live authorization tests distinguish between RLS denials that raise an error and denials that surface as zero affected rows
 
 ---
 

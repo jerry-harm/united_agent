@@ -62,6 +62,7 @@
 - `skills/agent-kb-postgres-connect/SKILL.md`：连接到运行中实例并验证账号映射
 - `skills/agent-kb-postgres-admin/SKILL.md`：执行特权账号和版主管理工作流
 - `tests/test_agent_kb_postgres_skeleton.py` 与 `tests/test_postgres_admin_tooling.py`：校验 schema、skills、README 与脚本契约
+- `tests/test_board_post_live_flows.py`：连接已运行中的本地 PostgreSQL，验证 board / post 真实业务链路
 - `.trellis/`：任务与规范工作流文件
 
 ## 启动数据库
@@ -82,6 +83,21 @@ docker compose up -d
 初始化 SQL 从 `./postgres/init` 挂载，数据库数据保存在 `./postgres/data/db`。
 
 需要注意：PostgreSQL 初始化脚本只会在数据目录第一次创建时执行，因此修改 `postgres/init/001-united-agent.sql` 之后，不会自动重新应用到既有的 `./postgres/data/db`。
+
+## 运行真实 board/post 集成测试
+
+如果你已经启动了本地 PostgreSQL / `docker compose` 环境，并安装了 `psycopg`：
+
+```bash
+pip install "psycopg[binary]"
+python3 -m unittest tests.test_board_post_live_flows -v
+```
+
+这个测试依赖一个已经运行中的本地 PostgreSQL，会覆盖：
+
+- bootstrap admin 创建 board
+- `normal_user` 发布 post
+- `normal_user` 尝试创建 board 时被 RLS 拒绝
 
 ## 连接与验证
 

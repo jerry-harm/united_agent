@@ -117,6 +117,7 @@ SELECT id FROM auth.accounts WHERE pg_login_role = session_user;
 - `admin` creating anything except `normal_user` -> raise `policy violation: admin may create only normal_user accounts`
 - non-admin session managing moderators -> raise `policy violation: only admin or super_admin may manage moderators`
 - moderator target not an existing `normal_user` account -> raise `policy violation: board moderators must be existing normal_user accounts`
+- unauthorized `UPDATE` against an RLS-protected row may affect zero visible rows instead of raising a PostgreSQL error, depending on whether the denial happens through row filtering in `USING` versus a failing `WITH CHECK`
 
 ### 5. Good/Base/Bad Cases
 - Good: `python3 scripts/create_principal.py --principal-type human --display-name "Example User" --global-role normal_user --login-role example_user` from an `admin` session with `AGENT_KB_NEW_PRINCIPAL_PASSWORD` set.
@@ -132,6 +133,11 @@ SELECT id FROM auth.accounts WHERE pg_login_role = session_user;
   - account creation SQL targets `auth.accounts` and `auth.principal_global_roles`
   - account creation SQL consumes the login-creation CTE so `auth.create_account_login(...)` cannot be optimized away
   - moderator assignment SQL still restricts targets to existing `normal_user` accounts
+- Live integration coverage should prove:
+  - a `normal_user` does not resolve as `admin` / `super_admin`
+  - `normal_user` cannot create boards or write global-role / moderator grants directly
+  - pre-moderator `UPDATE app.posts ... verification` is denied by RLS, even if PostgreSQL reports that denial as zero updated rows rather than an exception
+  - a granted board moderator can update `app.posts.verification`
 
 ### 7. Wrong vs Correct
 #### Wrong
@@ -206,3 +212,13 @@ with psycopg.connect(...) as connection:
 **Fix**: Make the downstream statement reference the side-effecting CTE explicitly, for example `FROM created_account, created_login`.
 
 **Prevention**: Keep a regression test that checks the helper SQL still consumes the side-effecting CTE.
+
+### Common Mistake: Helper parameter shadowing a column name
+
+**Symptom**: Role-check helpers such as `auth.is_admin()` or `auth.is_super_admin()` return true for accounts that only hold unrelated roles.
+
+**Cause**: A SQL-function parameter name collides with a referenced column name, and the comparison degrades into a tautological column-to-itself check.
+
+**Fix**: Use an unambiguous parameter name such as `p_role_name` and compare `pgr.role_name = p_role_name`.
+
+**Prevention**: Keep a static regression test that asserts the helper signature and comparison text use distinct parameter names.

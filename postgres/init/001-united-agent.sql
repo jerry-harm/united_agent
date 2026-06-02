@@ -144,7 +144,7 @@ AS $$
   WHERE a.pg_login_role = session_user;
 $$;
 
-CREATE FUNCTION auth.has_global_role(role_name auth.global_role) RETURNS boolean
+CREATE FUNCTION auth.has_global_role(p_role_name auth.global_role) RETURNS boolean
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
@@ -154,7 +154,7 @@ AS $$
     SELECT 1
     FROM auth.principal_global_roles AS pgr
     WHERE pgr.account_id = auth.current_account_id()
-      AND pgr.role_name = role_name
+      AND pgr.role_name = p_role_name
   );
 $$;
 

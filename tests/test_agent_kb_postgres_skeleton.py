@@ -54,7 +54,7 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             "REVOKE ALL ON SCHEMA public FROM PUBLIC",
             "CREATE FUNCTION auth.current_account_id()",
             "CREATE FUNCTION auth.current_account_status()",
-            "CREATE FUNCTION auth.has_global_role(role_name auth.global_role)",
+            "CREATE FUNCTION auth.has_global_role(p_role_name auth.global_role)",
             "CREATE FUNCTION auth.is_board_moderator(target_board_id bigint)",
             "CREATE FUNCTION auth.can_write()",
             "CREATE FUNCTION auth.create_account_login(",
@@ -86,6 +86,12 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             "USING (auth.can_write() AND auth.is_admin());",
         ):
             self.assertIn(expected, content)
+
+    def test_has_global_role_compares_against_function_parameter_not_column_name(self) -> None:
+        content = self.read_text("postgres/init/001-united-agent.sql")
+
+        self.assertIn("CREATE FUNCTION auth.has_global_role(p_role_name auth.global_role)", content)
+        self.assertIn("AND pgr.role_name = p_role_name", content)
 
     def test_old_bootstrap_sql_name_is_removed_from_live_paths(self) -> None:
         self.assertFalse((ROOT / "postgres/init/001-agent-knowledge-base.sql").exists())
