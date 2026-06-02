@@ -342,3 +342,36 @@ Fixed the role-helper parameter shadowing bug, added DB-native live authorizatio
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: Annotate init bootstrap SQL
+
+**Date**: 2026-06-03
+**Task**: Annotate init bootstrap SQL
+**Branch**: `main`
+
+### Summary
+
+Added review-friendly comments to the PostgreSQL init bootstrap SQL, covering major structure blocks, key auth helpers, and key RLS policies without changing behavior.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ee40167` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
