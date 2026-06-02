@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend quality/spec entry point for reviewing management tooling and docs migration"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Database and admin-helper contracts to validate while checking the operational account/grant migration"}

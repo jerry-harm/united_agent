@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend quality/spec entry point for reviewing schema, helper, and RLS changes"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Database contracts to check while validating the dual-schema, grant-table, and security-tightening refactor"}

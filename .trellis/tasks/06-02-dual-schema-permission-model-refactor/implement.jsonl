@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend spec index for the dual-schema database refactor task"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Current PostgreSQL schema, helper, RLS, and admin-helper contracts that the refactor must intentionally replace or preserve"}
