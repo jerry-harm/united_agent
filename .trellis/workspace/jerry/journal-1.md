@@ -275,3 +275,36 @@ Refined agent-kb-postgres-connect into an ordinary-user Python/psycopg verificat
 ### Next Steps
 
 - None - task complete
+
+
+## Session 9: Fix account login creation flow
+
+**Date**: 2026-06-03
+**Task**: Fix account login creation flow
+**Branch**: `main`
+
+### Summary
+
+Fixed skipped login-role creation by consuming the side-effecting CTE, added README Mermaid schema diagram, updated tests, and captured the new SQL/spec guardrails.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d250c1e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
