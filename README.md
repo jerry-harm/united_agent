@@ -8,18 +8,18 @@ Right now this repository is intentionally small: it ships the database bootstra
 
 The current MVP focuses on a direct-login PostgreSQL model for an agent knowledge base:
 
-- bootstraps the `app` schema from `postgres/init/001-agent-knowledge-base.sql`
-- creates core tables for principals, boards, posts, reviews, tags, and moderator assignments
+- bootstraps split `auth` and `app` schemas from `postgres/init/001-agent-knowledge-base.sql`
+- keeps identity and authorization in `auth.accounts`, `auth.principal_global_roles`, and `auth.board_moderators`
 - uses PostgreSQL Row Level Security (RLS) plus helper functions for authorization
-- maps identity from `session_user` to `app.principals.pg_login_role`
+- maps identity from `session_user` to the authenticated account login
 - seeds the local `postgres` login as a development `super_admin`
 - distributes reusable skills for connection and privileged admin workflows
 
 This means the project is already useful for:
 
 - standing up the schema locally
-- validating the principal/login model
-- creating dedicated human or agent principals from an admin session
+- validating the account/login model
+- creating dedicated human or agent accounts from an admin session
 - testing role and moderator behavior directly in PostgreSQL
 
 ## Current project status
@@ -58,11 +58,11 @@ If you are evaluating the repo, think of it as a solid database-first skeleton r
 Key paths:
 
 - `docker-compose.yaml` — current supported self-hosting path for local/dev use
-- `postgres/init/001-agent-knowledge-base.sql` — schema, helper functions, triggers, policies, and seed bootstrap principal
-- `scripts/create_principal.py` — safer wrapper around `app.bootstrap_principal(...)`
+- `postgres/init/001-agent-knowledge-base.sql` — schema, helper functions, triggers, policies, and seed bootstrap account
+- `scripts/create_principal.py` — safer wrapper around the checked-in account/bootstrap SQL flow
 - `scripts/manage_board_moderator.py` — helper for board-level moderator assignment management
 - `skills/agent-kb-postgres-admin/SKILL.md` — distributed skill for privileged account/moderator administration
-- `skills/agent-kb-postgres-connect/SKILL.md` — distributed skill for connecting to a running instance and creating principals from an admin session
+- `skills/agent-kb-postgres-connect/SKILL.md` — distributed skill for connecting to a running instance and creating accounts from an admin session
 - `tests/test_agent_kb_postgres_skeleton.py` and `tests/test_postgres_admin_tooling.py` — smoke/regression coverage for schema, skills, and helper-script contracts
 - `.trellis/` — task/spec workflow files used to manage work in this repository
 
@@ -93,19 +93,19 @@ Because PostgreSQL init scripts run only when the data directory is first initia
 psql postgresql://postgres:postgres@localhost:5432/agent_knowledge_base
 ```
 
-After startup, the init SQL creates the schema and inserts a local bootstrap principal:
+After startup, the init SQL creates the schema and inserts a local bootstrap account:
 
 - PostgreSQL login: `postgres`
-- business role: `super_admin`
+- global role: `super_admin`
 - display name: `Local Postgres Bootstrap`
 
 ### Verify the bootstrap
 
 ```sql
-SELECT current_user, session_user, app.current_principal_id(), app.current_business_role();
+SELECT current_user, session_user, auth.current_account_id(), auth.current_account_status();
 ```
 
-That query should resolve the session to the seeded bootstrap principal when you are connected as `postgres`.
+That query should resolve the session to the seeded bootstrap account when you are connected as `postgres`.
 
 ## Using the distributed skill
 
@@ -114,14 +114,14 @@ This repository currently distributes two concrete skills:
 - `skills/agent-kb-postgres-connect/SKILL.md`
 - `skills/agent-kb-postgres-admin/SKILL.md`
 
-Its purpose is narrow by design: it helps a user or agent connect to an **already running** PostgreSQL-backed knowledge base, create a principal from an admin session, and verify that identity mapping works.
+Its purpose is narrow by design: it helps a user or agent connect to an **already running** PostgreSQL-backed knowledge base, create an account from an admin session, and verify that identity mapping works.
 
 ### What the skill covers
 
 - connecting with `psql`
-- creating a dedicated principal login with `app.bootstrap_principal(...)`
-- reconnecting as that new principal
-- verifying `current_user`, `session_user`, and the resolved business role
+- creating a dedicated account login with the checked-in `auth`-schema SQL flow
+- reconnecting as that new account
+- verifying `current_user`, `session_user`, and the resolved account state
 
 ### What the skill does not cover
 
@@ -148,19 +148,19 @@ That is deliberate for this stage of the project: the repository already has the
 
 There are two layers of authority in the current schema:
 
-1. **Business roles** on `app.principals`
+1. **Global role grants** in `auth.principal_global_roles`
    - `super_admin`
    - `admin`
    - `normal_user`
-2. **Board-level moderator assignments** in `app.board_moderators`
+2. **Board-level moderator assignments** in `auth.board_moderators`
 
 Important current rules:
 
-- only `admin` and `super_admin` principals can call `app.bootstrap_principal(...)`
+- only `admin` and `super_admin` accounts can run the account-creation helper flow
 - helper scripts narrow this further: `admin` creates only `normal_user`, while `super_admin` creates `admin`
-- only `super_admin` should change global business roles directly
-- board-moderator helper scripts only target existing `normal_user` principals
-- the helpers derive the actor privilege from `app.current_business_role()` inside the database, not from a user-provided CLI role flag
+- only `super_admin` should change global role grants directly
+- board-moderator helper scripts only target existing `normal_user` accounts
+- the helpers derive actor privilege from `auth` helper functions and grant tables inside the database, not from a user-provided CLI role flag
 - boards are globally readable
 - verification updates on posts are limited to admins or board moderators
 - review history is admin-visible only
@@ -189,7 +189,7 @@ For principal creation you can also set:
 export AGENT_KB_NEW_PRINCIPAL_PASSWORD='change-this-password'
 ```
 
-### Create a new account/principal
+### Create a new account
 
 Preferred path:
 
@@ -197,31 +197,32 @@ Preferred path:
 python3 scripts/create_principal.py \
   --principal-type human \
   --display-name "Example Moderator" \
-  --business-role normal_user \
+  --global-role normal_user \
   --login-role example_moderator
 ```
 
-Use `--business-role admin` from a reviewed `super_admin` session when creating an admin principal.
+Use `--global-role admin` from a reviewed `super_admin` session when creating an admin account.
 
 The helper enforces the safer policy from the current database session's role, not from a user-provided CLI role flag. The Python entrypoint reads `scripts/sql/create_principal.sql` and executes it through `psycopg`.
 
-Equivalent underlying SQL:
+Equivalent underlying SQL shape:
 
 ```sql
-SELECT * FROM app.bootstrap_principal(
-  'human',
-  'Example Moderator',
-  'normal_user',
-  'example_moderator',
-  'change-this-password'
-);
+INSERT INTO auth.accounts (principal_type, display_name, pg_login_role, account_status)
+VALUES ('human', 'Example Moderator', 'example_moderator', 'active');
+
+SELECT auth.create_account_login('example_moderator', 'change-this-password');
+
+INSERT INTO auth.principal_global_roles (account_id, role_name, granted_by)
+VALUES (<ACCOUNT_ID>, 'normal_user', auth.current_account_id());
 ```
 
 What this does:
 
 - creates a dedicated PostgreSQL login role
 - grants that login membership in `agent_kb_user`
-- inserts the matching row into `app.principals`
+- inserts the matching row into `auth.accounts`
+- records the selected global role in `auth.principal_global_roles`
 
 Reconnect as that new login to confirm the mapping:
 
@@ -232,38 +233,44 @@ psql postgresql://example_moderator:change-this-password@localhost:5432/agent_kn
 Then verify:
 
 ```sql
-SELECT current_user, session_user, app.current_principal_id(), app.current_business_role();
+SELECT current_user, session_user, auth.current_account_id(), auth.current_account_status();
 ```
 
-### Inspect principals and roles
+### Inspect accounts and grants
 
 For day-to-day checks, these are usually enough:
 
 ```sql
-SELECT id, principal_type, display_name, business_role, pg_login_role
-FROM app.principals
+SELECT id, principal_type, display_name, account_status, pg_login_role
+FROM auth.accounts
 ORDER BY id;
+
+SELECT account_id, role_name, granted_by
+FROM auth.principal_global_roles
+ORDER BY account_id, role_name;
 ```
 
-### Change a principal's business role
+### Change a global role grant
 
-Business-role changes are still manual and should be treated as a `super_admin` operation. From a reviewed super-admin session, update the principal row directly:
+Global-role changes are still manual and should be treated as a `super_admin` operation. From a reviewed super-admin session, update the grant table directly:
 
 ```sql
-UPDATE app.principals
-SET business_role = 'admin'
-WHERE pg_login_role = 'example_moderator';
+INSERT INTO auth.principal_global_roles (account_id, role_name, granted_by)
+VALUES (<ACCOUNT_ID>, 'admin', auth.current_account_id())
+ON CONFLICT (account_id, role_name) DO NOTHING;
 ```
 
 Then re-check the result:
 
 ```sql
-SELECT id, display_name, business_role, pg_login_role
-FROM app.principals
-WHERE pg_login_role = 'example_moderator';
+SELECT a.id, a.display_name, pgr.role_name, a.pg_login_role
+FROM auth.accounts AS a
+JOIN auth.principal_global_roles AS pgr
+  ON pgr.account_id = a.id
+WHERE a.pg_login_role = 'example_moderator';
 ```
 
-Use the same pattern to move a principal between `normal_user`, `admin`, and `super_admin` as needed, but do not delegate this to `admin` operators.
+Use the same pattern to add or remove reviewed role grants as needed, but do not delegate this to `admin` operators.
 
 ### Grant board moderator access
 
@@ -272,24 +279,24 @@ Preferred path:
 ```bash
 python3 scripts/manage_board_moderator.py assign \
   --board-id <BOARD_ID> \
-  --principal-id <PRINCIPAL_ID>
+  --account-id <ACCOUNT_ID>
 ```
 
-The helper intentionally refuses moderator assignment for `admin` or `super_admin` principals; use it only for existing `normal_user` principals. The board-moderator helper scripts only target existing `normal_user` principals and choose `scripts/sql/manage_board_moderator_assign.sql`, `scripts/sql/manage_board_moderator_revoke.sql`, or `scripts/sql/manage_board_moderator_list.sql` behind the Python wrapper, which executes them through `psycopg`.
+The helper intentionally refuses moderator assignment for `admin` or `super_admin` accounts; use it only for existing `normal_user` accounts. The board-moderator helper scripts only target existing `normal_user` accounts and choose `scripts/sql/manage_board_moderator_assign.sql`, `scripts/sql/manage_board_moderator_revoke.sql`, or `scripts/sql/manage_board_moderator_list.sql` behind the Python wrapper, which executes them through `psycopg`.
 
 Equivalent SQL:
 
 ```sql
-INSERT INTO app.board_moderators (board_id, principal_id, granted_by)
-VALUES (<BOARD_ID>, <PRINCIPAL_ID>, app.current_principal_id());
+INSERT INTO auth.board_moderators (board_id, account_id, granted_by)
+VALUES (<BOARD_ID>, <ACCOUNT_ID>, auth.current_account_id());
 ```
 
 To inspect current assignments:
 
 ```sql
-SELECT board_id, principal_id, granted_at, granted_by
-FROM app.board_moderators
-ORDER BY board_id, principal_id;
+SELECT board_id, account_id, granted_at, granted_by
+FROM auth.board_moderators
+ORDER BY board_id, account_id;
 ```
 
 To revoke moderator access, you can use:
@@ -297,15 +304,15 @@ To revoke moderator access, you can use:
 ```bash
 python3 scripts/manage_board_moderator.py revoke \
   --board-id <BOARD_ID> \
-  --principal-id <PRINCIPAL_ID>
+  --account-id <ACCOUNT_ID>
 ```
 
 Or the underlying SQL:
 
 ```sql
-DELETE FROM app.board_moderators
+DELETE FROM auth.board_moderators
 WHERE board_id = <BOARD_ID>
-  AND principal_id = <PRINCIPAL_ID>;
+  AND account_id = <ACCOUNT_ID>;
 ```
 
 ### Current limitations
