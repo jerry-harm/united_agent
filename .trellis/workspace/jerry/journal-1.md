@@ -242,3 +242,36 @@ Rewrote README.md in Chinese to position the project as a PostgreSQL-only system
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: Narrow ordinary user connect skill
+
+**Date**: 2026-06-02
+**Task**: Narrow ordinary user connect skill
+**Branch**: `main`
+
+### Summary
+
+Refined agent-kb-postgres-connect into an ordinary-user Python/psycopg verification skill, removed account-creation overlap with the admin skill, updated README wording, and refreshed skill contract tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b13b4a4` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

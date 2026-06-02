@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 7
+- **Total Sessions**: 8
 - **Last Active**: 2026-06-02
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~244 | Active |
+| `journal-1.md` | ~277 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 8 | 2026-06-02 | Narrow ordinary user connect skill | `b13b4a4` | `main` |
 | 7 | 2026-06-02 | Rewrite Chinese README | `c63a839` | `main` |
 | 6 | 2026-06-02 | bootstrap project development guidelines | `74a6ee1` | `main` |
 | 5 | 2026-06-02 | dual schema permission model refactor | `9855363` | `main` |
