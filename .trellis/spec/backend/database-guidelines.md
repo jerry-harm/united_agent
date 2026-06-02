@@ -71,6 +71,76 @@ SELECT id FROM app.principals WHERE pg_login_role = session_user;
 
 ---
 
+## Scenario: SQL-file-backed admin helpers
+
+### 1. Scope / Trigger
+- Trigger: privileged principal creation and board-moderator management are implemented as shipped repo helpers, and those helpers must stay cross-platform while enforcing policy from the live PostgreSQL session.
+
+### 2. Signatures
+- Python entrypoints:
+  - `python3 scripts/create_principal.py --principal-type <human|agent> --display-name <text> --business-role <normal_user|admin> --login-role <pg_role> [--new-password <password>]`
+  - `python3 scripts/manage_board_moderator.py <assign|revoke|list> [--board-id <id> --principal-id <id>]`
+- SQL files executed by those entrypoints:
+  - `scripts/sql/create_principal.sql`
+  - `scripts/sql/manage_board_moderator_assign.sql`
+  - `scripts/sql/manage_board_moderator_revoke.sql`
+  - `scripts/sql/manage_board_moderator_list.sql`
+
+### 3. Contracts
+- Required environment keys:
+  - `AGENT_KB_DB_HOST`
+  - `AGENT_KB_DB_USER`
+  - `AGENT_KB_DB_PASSWORD`
+- Optional environment keys:
+  - `AGENT_KB_DB_PORT` (default `5432`)
+  - `AGENT_KB_DB_NAME` (default `agent_knowledge_base`)
+  - `AGENT_KB_NEW_PRINCIPAL_PASSWORD` (used by `create_principal.py`)
+- Runtime dependency:
+  - Python environment with `psycopg` installed (recommended install command: `pip install "psycopg[binary]"`)
+- Execution contract:
+  - Python wrappers must read the checked-in SQL file and execute it through `psycopg`.
+  - SQL files should keep placeholder tokens in the `{{name}}` form so the Python wrapper can render safe SQL literals before execution.
+  - Helper SQL must derive actor privilege from `app.current_business_role()` inside the database.
+  - Helpers must not accept or trust a user-supplied actor-role override.
+
+### 4. Validation & Error Matrix
+- missing required DB env var -> exit with `missing required environment variable: <NAME>`
+- invalid `--login-role` format -> exit with `login role must match PostgreSQL role naming rules`
+- missing principal password -> exit with `provide --new-password or set AGENT_KB_NEW_PRINCIPAL_PASSWORD`
+- `admin` creating anything except `normal_user` -> raise `policy violation: admin may create only normal_user principals`
+- non-admin session managing moderators -> raise `policy violation: only admin or super_admin may manage moderators`
+- moderator target not an existing `normal_user` principal -> raise `policy violation: board moderators must be existing normal_user principals`
+
+### 5. Good/Base/Bad Cases
+- Good: `python3 scripts/create_principal.py --principal-type human --display-name "Example User" --business-role normal_user --login-role example_user` from an `admin` session with `AGENT_KB_NEW_PRINCIPAL_PASSWORD` set.
+- Base: `python3 scripts/manage_board_moderator.py list` from an `admin` session to inspect current assignments.
+- Bad: embedding privileged SQL directly inside Python strings and branching on a user-provided `--actor-role` flag.
+
+### 6. Tests Required
+- Static tooling test must prove:
+  - the Python entrypoints exist
+  - the SQL files exist
+  - the shared runner uses env defaults for port/name
+  - the shared runner imports `psycopg`, reads SQL files from disk, and executes them through a cursor
+  - principal creation SQL still calls `app.bootstrap_principal(...)`
+  - moderator assignment SQL still restricts targets to existing `normal_user` principals
+
+### 7. Wrong vs Correct
+#### Wrong
+```python
+cursor.execute(inline_sql_with_actor_role_flag)
+```
+
+#### Correct
+```python
+with psycopg.connect(...) as connection:
+    rendered_sql = render_sql(connection, sql_path.read_text(encoding="utf-8"), variables)
+    with connection.cursor() as cursor:
+        cursor.execute(rendered_sql)
+```
+
+---
+
 ## Query Patterns
 
 - Put reusable authorization logic in `SECURITY DEFINER` helper functions under `app`.
