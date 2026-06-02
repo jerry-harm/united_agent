@@ -1,51 +1,46 @@
 # Quality Guidelines
 
-> Code quality standards for frontend development.
+> Current quality guidance for frontend work in this repo.
 
 ---
 
 ## Overview
 
-<!--
-Document your project's quality standards here.
+There is no frontend codebase yet, so there is no active frontend lint/test stack to enforce.
 
-Questions to answer:
-- What patterns are forbidden?
-- What linting rules do you enforce?
-- What are your testing requirements?
-- What code review standards apply?
--->
-
-(To be filled by the team)
+The useful current rule is process-oriented: the first task that adds real frontend code must also update these frontend spec files to match the chosen stack.
 
 ---
 
 ## Forbidden Patterns
 
-<!-- Patterns that should never be used and why -->
-
-(To be filled by the team)
+- Pretending a frontend implementation already exists.
+- Adding frontend spec text copied from generic templates without repo examples.
+- Describing API/UI integration paths that are not shipped yet.
 
 ---
 
 ## Required Patterns
 
-<!-- Patterns that must always be used -->
+When the first frontend code is introduced, the same task should:
 
-(To be filled by the team)
+- update `README.md` if project surface area changes
+- replace these placeholder-absence notes with real conventions
+- add real file-path examples to every frontend spec file it establishes
+- add the actual verification commands for the chosen stack
 
 ---
 
 ## Testing Requirements
 
-<!-- What level of testing is expected -->
+No frontend-specific test command exists today.
 
-(To be filled by the team)
+Do not claim frontend linting, accessibility automation, or component tests are required until those tools exist in the repo.
 
 ---
 
 ## Code Review Checklist
 
-<!-- What reviewers should check -->
-
-(To be filled by the team)
+- Does the change describe only frontend code that actually exists?
+- If a frontend stack is introduced, were the corresponding spec files updated immediately?
+- Were verification commands added to the repo, not just mentioned in docs?

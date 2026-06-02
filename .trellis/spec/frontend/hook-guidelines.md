@@ -1,51 +1,44 @@
 # Hook Guidelines
 
-> How hooks are used in this project.
+> Current hook guidance for this repository.
 
 ---
 
 ## Overview
 
-<!--
-Document your project's hook conventions here.
+No custom hooks exist because no frontend framework exists in the repo yet.
 
-Questions to answer:
-- What custom hooks do you have?
-- How do you handle data fetching?
-- What are the naming conventions?
-- How do you share stateful logic?
--->
+That means there is currently:
 
-(To be filled by the team)
+- no `use*` naming convention in active code
+- no client-side data fetching library
+- no shared stateful UI logic to reuse
 
 ---
 
 ## Custom Hook Patterns
 
-<!-- How to create and structure custom hooks -->
+Not defined yet.
 
-(To be filled by the team)
+Do not add hook-specific conventions until the repo contains real hook files.
 
 ---
 
 ## Data Fetching
 
-<!-- How data fetching is handled (React Query, SWR, etc.) -->
+Not defined for frontend code because no web client exists.
 
-(To be filled by the team)
+Current data access is database-direct via PostgreSQL and thin Python admin wrappers, not browser-side fetching.
 
 ---
 
 ## Naming Conventions
 
-<!-- Hook naming rules (use*, etc.) -->
-
-(To be filled by the team)
+No frontend hook naming convention exists yet.
 
 ---
 
 ## Common Mistakes
 
-<!-- Hook-related mistakes your team has made -->
-
-(To be filled by the team)
+- Assuming React is already the chosen frontend framework.
+- Writing hook guidance that copies generic framework advice without any in-repo examples.

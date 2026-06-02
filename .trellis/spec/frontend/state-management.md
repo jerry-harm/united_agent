@@ -1,51 +1,52 @@
 # State Management
 
-> How state is managed in this project.
+> Current frontend state-management reality.
 
 ---
 
 ## Overview
 
-<!--
-Document your project's state management conventions here.
+No frontend state-management solution exists yet because no frontend implementation exists.
 
-Questions to answer:
-- What state management solution do you use?
-- How is local vs global state decided?
-- How do you handle server state?
-- What are the patterns for derived state?
--->
+The current project state is:
 
-(To be filled by the team)
+- persistent data lives in PostgreSQL
+- authorization state is enforced in SQL/RLS helpers
+- admin workflows run through Python scripts and `psql`-style operator flows
+- there is no browser local state, global state store, or server-state cache layer in the repo
 
 ---
 
 ## State Categories
 
-<!-- Local state, global state, server state, URL state -->
+Frontend state categories are not defined yet.
 
-(To be filled by the team)
+Backend-side state that already exists and should not be misdescribed as frontend state includes:
+
+- account identity in `auth.accounts`
+- global role grants in `auth.principal_global_roles`
+- board moderator assignment in `auth.board_moderators`
+- content and review state in `app.*` tables
 
 ---
 
 ## When to Use Global State
 
-<!-- Criteria for promoting state to global -->
+No frontend global-state rule exists yet.
 
-(To be filled by the team)
+Do not introduce Redux/Zustand/Context conventions into specs until the repo actually adopts one.
 
 ---
 
 ## Server State
 
-<!-- How server data is cached and synchronized -->
+There is no frontend server-state cache contract yet.
 
-(To be filled by the team)
+If a future UI is added, document the real fetching/caching tool and invalidation model here in the same task.
 
 ---
 
 ## Common Mistakes
 
-<!-- State management mistakes your team has made -->
-
-(To be filled by the team)
+- Treating database authorization state as if it were already mirrored in a client store.
+- Picking a frontend state library in docs before any code or tooling chooses one.

@@ -1,54 +1,50 @@
 # Directory Structure
 
-> How frontend code is organized in this project.
+> Current frontend directory reality.
 
 ---
 
 ## Overview
 
-<!--
-Document your project's frontend directory structure here.
+There is no frontend implementation in this repository yet.
 
-Questions to answer:
-- Where do components live?
-- How are features/modules organized?
-- Where are shared utilities?
-- How are assets organized?
--->
+Today the repo ships:
 
-(To be filled by the team)
+- PostgreSQL bootstrap in `postgres/`
+- Python admin tooling in `scripts/`
+- tests in `tests/`
+- skill artifacts in `skills/`
+
+It does **not** ship `src/`, `app/`, `components/`, `pages/`, or frontend build tooling.
 
 ---
 
 ## Directory Layout
 
-```
-<!-- Replace with your actual structure -->
-src/
-├── ...
-└── ...
+```text
+No frontend directory exists yet.
 ```
 
 ---
 
 ## Module Organization
 
-<!-- How should new features be organized? -->
+Until frontend code exists:
 
-(To be filled by the team)
+- do not invent component/module placement rules in implementation tasks
+- do not reference nonexistent React/Vue/Svelte directories in docs
+- update this file in the same task that introduces the first real frontend code
 
 ---
 
 ## Naming Conventions
 
-<!-- File and folder naming rules -->
+No frontend naming convention is established yet because no frontend files exist.
 
-(To be filled by the team)
+The first frontend task should document the actual chosen framework, entrypoint layout, and file naming scheme here.
 
 ---
 
 ## Examples
 
-<!-- Link to well-organized modules as examples -->
-
-(To be filled by the team)
+There are currently no in-repo frontend examples to cite.

@@ -1,51 +1,48 @@
 # Type Safety
 
-> Type safety patterns in this project.
+> Current frontend type-safety status.
 
 ---
 
 ## Overview
 
-<!--
-Document your project's type safety conventions here.
+No frontend TypeScript code exists yet, so there is no frontend type-safety convention to enforce.
 
-Questions to answer:
-- What type system do you use?
-- How are types organized?
-- What validation library do you use?
-- How do you handle type inference?
--->
+The only active typed code in the repo today is Python with basic annotations, for example:
 
-(To be filled by the team)
+- `scripts/_postgres_admin_common.py`
+- `scripts/create_principal.py`
+- `scripts/manage_board_moderator.py`
+
+This file should stay explicit about that absence instead of guessing a future TypeScript stack.
 
 ---
 
 ## Type Organization
 
-<!-- Where types are defined, shared types vs local types -->
-
-(To be filled by the team)
+Not defined for frontend code yet.
 
 ---
 
 ## Validation
 
-<!-- Runtime validation patterns (Zod, Yup, io-ts, etc.) -->
+No frontend runtime validation library is present in the repo.
 
-(To be filled by the team)
+Current validation lives in:
+
+- Python CLI argument parsing via `argparse`
+- Python checks that raise `SystemExit`
+- PostgreSQL constraints, enums, helper functions, and RLS policies
 
 ---
 
 ## Common Patterns
 
-<!-- Type utilities, generics, type guards -->
-
-(To be filled by the team)
+No frontend type patterns exist yet.
 
 ---
 
 ## Forbidden Patterns
 
-<!-- any, type assertions, etc. -->
-
-(To be filled by the team)
+- Do not document `TypeScript`, `Zod`, or other frontend validation/type tools as established conventions until they are actually added.
+- Do not cite example type files that do not exist in the repository.

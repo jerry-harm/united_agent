@@ -1,51 +1,73 @@
 # Logging Guidelines
 
-> How logging is done in this project.
+> Current logging/output conventions for backend tooling.
 
 ---
 
 ## Overview
 
-<!--
-Document your project's logging conventions here.
+This repository does **not** have a dedicated logging framework yet.
 
-Questions to answer:
-- What logging library do you use?
-- What are the log levels and when to use each?
-- What should be logged?
-- What should NOT be logged (PII, secrets)?
--->
+Current behavior is minimal by design:
 
-(To be filled by the team)
+- Python helper scripts print query results to stdout when the SQL command returns rows.
+- Validation failures use `SystemExit` messages.
+- SQL failures surface as PostgreSQL exceptions.
+- There is no structured JSON logging, request logging, or log aggregation contract yet.
+
+Prefer documenting this minimal reality over inventing `logger.py`, log schemas, or server-style log levels.
 
 ---
 
-## Log Levels
+## Output Levels in Practice
 
-<!-- When to use each level: debug, info, warn, error -->
+There is no formal log-level API today. Use the following interpretation when touching current scripts:
 
-(To be filled by the team)
+- **Normal operator output**: rows printed from successful SQL execution.
+  - Example: `scripts/_postgres_admin_common.py` prints returned rows from `cursor.fetchall()`.
+- **Validation failure**: `SystemExit` with a concise actionable message.
+- **Database failure**: let the raised SQL exception reach the operator.
+
+If you add a real logging library later, update this spec in the same task.
 
 ---
 
 ## Structured Logging
 
-<!-- Log format, required fields -->
+No structured logging standard exists yet.
 
-(To be filled by the team)
+Current backend tooling is CLI-oriented, so the shipped contract is:
+
+- readable stdout for successful result rows
+- readable exception text for failures
+
+Do not introduce ad hoc JSON logs or custom log wrappers in one script only.
 
 ---
 
-## What to Log
+## What to Log or Print
 
-<!-- Important events to log -->
+Current safe output examples:
 
-(To be filled by the team)
+- listing board moderators from `scripts/sql/manage_board_moderator_list.sql`
+- returning newly created account rows from `scripts/sql/create_principal.sql`
+- explicit operator guidance such as missing env var names
+
+If you need to add observability before a server exists, prefer small operator-facing context such as:
+
+- action name
+- target account or board id
+- SQL file path being executed
 
 ---
 
 ## What NOT to Log
 
-<!-- Sensitive data, PII, secrets -->
+Never print or log:
 
-(To be filled by the team)
+- database passwords from `AGENT_KB_DB_PASSWORD`
+- new account passwords from `--new-password` or `AGENT_KB_NEW_PRINCIPAL_PASSWORD`
+- fully rendered SQL when it would expose secrets
+- unrelated environment dumps
+
+Avoid noisy duplicate logging. In the current toolchain, surfacing the real exception is usually better than logging and re-raising the same failure.

@@ -1,59 +1,50 @@
 # Component Guidelines
 
-> How components are built in this project.
+> Current component guidance for this repository.
 
 ---
 
 ## Overview
 
-<!--
-Document your project's component conventions here.
+No UI component system exists yet. There are no component files, no chosen framework, and no styling stack in the repo.
 
-Questions to answer:
-- What component patterns do you use?
-- How are props defined?
-- How do you handle composition?
-- What accessibility standards apply?
--->
+Because of that, the current rule is conservative:
 
-(To be filled by the team)
+- do not fabricate component conventions
+- do not assume React props, Vue props, Tailwind classes, or CSS module usage
+- do not cite accessibility patterns as if they are already implemented
 
 ---
 
 ## Component Structure
 
-<!-- Standard structure of a component file -->
+Not defined yet.
 
-(To be filled by the team)
+When the first real component lands, document the actual file structure with examples from the repo in the same task.
 
 ---
 
 ## Props Conventions
 
-<!-- How props should be defined and typed -->
-
-(To be filled by the team)
+Not defined yet. No frontend type or props contract exists in the repository.
 
 ---
 
 ## Styling Patterns
 
-<!-- How styles are applied (CSS modules, styled-components, Tailwind, etc.) -->
-
-(To be filled by the team)
+Not defined yet. No CSS framework or styling strategy is present in the repo.
 
 ---
 
 ## Accessibility
 
-<!-- A11y requirements and patterns -->
+There is no implemented UI to evaluate for accessibility yet.
 
-(To be filled by the team)
+Future frontend work should add concrete accessibility rules based on the actual framework and component patterns that ship.
 
 ---
 
 ## Common Mistakes
 
-<!-- Component-related mistakes your team has made -->
-
-(To be filled by the team)
+- Writing spec text as if a component library already exists.
+- Introducing generated frontend conventions into docs before code lands.

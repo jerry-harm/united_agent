@@ -6,7 +6,7 @@
 
 ## Overview
 
-This directory contains guidelines for backend development. Fill in each file with your project's specific conventions.
+This directory captures the backend conventions that exist in this repository today.
 
 ---
 
@@ -14,22 +14,22 @@ This directory contains guidelines for backend development. Fill in each file wi
 
 | Guide | Description | Status |
 |-------|-------------|--------|
-| [Directory Structure](./directory-structure.md) | Module organization and file layout | To fill |
+| [Directory Structure](./directory-structure.md) | Module organization and file layout | In use |
 | [Database Guidelines](./database-guidelines.md) | PostgreSQL schema, RLS, bootstrap, and migration conventions | In use |
-| [Error Handling](./error-handling.md) | Error types, handling strategies | To fill |
-| [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
-| [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
+| [Error Handling](./error-handling.md) | Error types, handling strategies | In use |
+| [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | In use |
+| [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | In use |
 
 ---
 
-## How to Fill These Guidelines
+## How to Use These Guidelines
 
-For each guideline file:
+When writing or reviewing backend changes:
 
-1. Document your project's **actual conventions** (not ideals)
-2. Include **code examples** from your codebase
-3. List **forbidden patterns** and why
-4. Add **common mistakes** your team has made
+1. Start with the guideline file that matches the area you are touching
+2. Follow the real file-path examples cited there
+3. Preserve listed forbidden patterns unless the codebase changes and the spec is updated in the same task
+4. Update these docs when backend reality changes
 
 The goal is to help AI assistants and new team members understand how YOUR project works.
 
