@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "backend documentation context for the current PostgreSQL-backed repository capabilities and conventions"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "database bootstrap, identity mapping, and admin-operation conventions that README must describe accurately"}
