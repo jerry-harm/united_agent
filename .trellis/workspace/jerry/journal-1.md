@@ -143,3 +143,36 @@ Finished the dual-schema design split and seeded two follow-up implementation ta
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: dual schema permission model refactor
+
+**Date**: 2026-06-02
+**Task**: dual schema permission model refactor
+**Branch**: `main`
+
+### Summary
+
+Implemented the auth/app bootstrap split, unified local PostgreSQL naming to united_agent, tightened RLS and helper write gates around auth.can_write(), and updated regression coverage plus database/admin documentation.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9855363` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
