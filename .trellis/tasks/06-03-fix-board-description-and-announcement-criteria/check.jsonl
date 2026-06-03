@@ -1,0 +1,10 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Reviewer must check the updated 'Bootstrap default boards, announcement seed' section keeps: idempotency (ON CONFLICT), required descriptions, default-board invariants, and the announcement rule."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer consistency check — SQL seed, connect SKILL, admin SKILL, spec, and tests must all reference the same set of board slugs and the same announcement rule."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify quality bar — description text in Chinese must still be non-empty and parse-safe in SQL strings."}
+{"file": "tests/test_postgres_connect_tooling.py", "reason": "Verify tooling tests still pass and that they assert the new board slugs / descriptions."}
+{"file": "tests/test_postgres_admin_tooling.py", "reason": "Verify admin tooling tests still pass after the connect-side board rename / description change."}
+{"file": "tests/test_agent_kb_postgres_skeleton.py", "reason": "Verify the static schema test still passes after the seeded board slug and description change."}
+{"file": "postgres/init/001-united-agent.sql", "reason": "Source-of-truth review: Chinese descriptions are non-empty, issue is replaced with help-needed, announcement verification is 'verified', and the announcement body uses the final Chinese wording."}
+{"file": "skills/agent-kb-postgres-connect/SKILL.md", "reason": "Verify the connect skill now (a) explains that AI can learn and retrieve from the DB, (b) teaches the verified-only announcement rule, and (c) uses the new board slug list."}
+{"file": "skills/agent-kb-postgres-admin/SKILL.md", "reason": "Verify the admin skill now teaches operators to set verification=verified on announcements so AI will read them."}
+{"file": "README.md", "reason": "Verify the README still references the same set of board slugs and the same announcement rule."}

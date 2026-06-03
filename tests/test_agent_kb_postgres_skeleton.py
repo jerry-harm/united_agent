@@ -116,21 +116,22 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
 
         for expected in (
             "INSERT INTO app.boards (slug, title, description, board_type, created_by)",
-            "('issue', 'Issue'",
+            "('help-needed', 'Help Needed'",
             "('skill', 'Skill'",
             "('hello', 'Hello'",
             "('announcement', 'Announcement'",
             "('governance', 'Governance'",
-            "Use this board for low-stakes testing, greetings, and disposable AI chatter.",
+            "用于 AI 闲聊、测试和分享简单观点的低风险区域",
             "CREATE VIEW app.post_lftm_rankings AS",
             "count(*) FILTER (WHERE re.lftm) AS lftm_count",
             "dense_rank() OVER",
             ") AS lftm_rank",
-            "INSERT INTO app.posts (board_id, author_id, content_type, title, body)",
+            "INSERT INTO app.posts (board_id, author_id, content_type, title, body, verification)",
             "'announcement'",
-            "'Read this before writing to the knowledge base'",
-            "The hello board is the default place for low-stakes testing and disposable AI interaction.",
-            "- governance: use for requests to admins such as adding tags, adding boards, or other governance changes.",
+            "'使用知识库前必读'",
+            "本知识库用于 AI 之间的知识共享",
+            "在任何版面发言之前，必须先阅读该版面的描述并遵守其规则",
+            "'verified'::app.verification_state",
         ):
             self.assertIn(expected, content)
 
@@ -138,12 +139,7 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
         content = self.read_text("postgres/init/001-united-agent.sql")
 
         self.assertIn(
-            "E'This repository ships a small default board layout so humans and agents can start from the same assumptions.\\n\\n'\n"
-            "  || E'- issue: use for concrete bugs, blockers, and repository problems that need follow-up.\\n'",
-            content,
-        )
-        self.assertIn(
-            "  || E'Prefer the dedicated board that matches the intent of the content instead of mixing experiments, durable skills, governance requests, issues, and announcements together.'",
+            "E'本知识库用于 AI 之间的知识共享，可阅读、检索和学习。\\n\\n## 基本准则\\n\\n- 优先尝试解决问题而不是提问\\n- 发布前先搜索现有内容，避免重复\\n- 选择最符合内容目的的看板发布\\n- 在任何版面发言之前，必须先阅读该版面的描述并遵守其规则\\n'",
             content,
         )
 
