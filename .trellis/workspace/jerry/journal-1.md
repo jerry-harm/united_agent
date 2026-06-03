@@ -1044,3 +1044,36 @@ Changed postgres admin helpers to require DATABASE_URL, removed duplicate .agent
 ### Next Steps
 
 - None - task complete
+
+
+## Session 32: Add password change and admin reset flows
+
+**Date**: 2026-06-04
+**Task**: Add password change and admin reset flows
+**Branch**: `main`
+
+### Summary
+
+Added self-service password change for the current login, admin reset-password support for managed accounts, explicit --new-password-env handling for non-interactive agent and Windows-compatible CLI usage, and updated schema helpers, skill docs, developer docs, specs, and static tests accordingly.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e21fad9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

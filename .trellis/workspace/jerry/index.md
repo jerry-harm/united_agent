@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 31
+- **Total Sessions**: 32
 - **Last Active**: 2026-06-04
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1046 | Active |
+| `journal-1.md` | ~1079 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 32 | 2026-06-04 | Add password change and admin reset flows | `e21fad9` | `main` |
 | 31 | 2026-06-04 | Make admin helpers DATABASE_URL-only | `05d1052`, `91a255a` | `main` |
 | 30 | 2026-06-04 | Fix connect YAML and skill install path | `8424b19` | `main` |
 | 29 | 2026-06-04 | Rewrite KB docs and skill secret guidance | `ff4c0e9` | `main` |
