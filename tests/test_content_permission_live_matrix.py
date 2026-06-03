@@ -7,9 +7,10 @@ from tests.live_postgres_helpers import ROOT, LivePostgresTestCase
 
 class LiveContentPermissionDocumentationTest(unittest.TestCase):
     def test_readme_documents_live_content_permission_matrix_test(self) -> None:
-        content = (ROOT / "README.md").read_text(encoding="utf-8")
+        content = (ROOT / "docs/developer-guide.md").read_text(encoding="utf-8")
 
         self.assertIn("tests/test_content_permission_live_matrix.py", content)
+        self.assertIn("uv run python -m unittest tests.test_content_permission_live_matrix -v", content)
         self.assertIn("python3 -m unittest tests.test_content_permission_live_matrix -v", content)
         self.assertIn("review_entries", content)
         self.assertIn("review_history", content)

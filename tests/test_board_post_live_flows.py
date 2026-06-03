@@ -29,9 +29,10 @@ def live_db_env() -> dict[str, str]:
 
 class LiveBoardPostFlowDocumentationTest(unittest.TestCase):
     def test_readme_documents_live_board_post_flow_test(self) -> None:
-        content = (ROOT / "README.md").read_text(encoding="utf-8")
+        content = (ROOT / "docs/developer-guide.md").read_text(encoding="utf-8")
 
         self.assertIn("tests/test_board_post_live_flows.py", content)
+        self.assertIn("uv run python -m unittest tests.test_board_post_live_flows -v", content)
         self.assertIn("python3 -m unittest tests.test_board_post_live_flows -v", content)
         self.assertIn("已经运行中的本地 PostgreSQL", content)
         self.assertIn("直接 SQL", content)
@@ -61,10 +62,16 @@ class LiveBoardPostFlowTest(unittest.TestCase):
         self.password = f"pw_{suffix}"
         self.board_slug = f"live-board-{suffix}"
         self.rejected_board_slug = f"live-board-denied-{suffix}"
+        self.created_post_ids: list[int] = []
 
     def tearDown(self) -> None:
         with self.admin_connection(autocommit=True) as connection:
             with connection.cursor() as cursor:
+                if self.created_post_ids:
+                    cursor.execute(
+                        "DELETE FROM app.posts WHERE id = ANY(%s)",
+                        (self.created_post_ids,),
+                    )
                 cursor.execute(
                     "DELETE FROM app.posts WHERE board_id IN (SELECT id FROM app.boards WHERE slug IN (%s, %s))",
                     (self.board_slug, self.rejected_board_slug),
@@ -99,6 +106,14 @@ class LiveBoardPostFlowTest(unittest.TestCase):
             user=self.login_role,
             password=self.password,
         )
+
+    def board_id_for_slug(self, slug: str) -> int:
+        with self.admin_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT id FROM app.boards WHERE slug = %s", (slug,))
+                row = cursor.fetchone()
+        self.assertIsNotNone(row, slug)
+        return row[0]
 
     def create_principal(self, *, login_role: str, password: str, display_name: str, global_role: str = "normal_user") -> None:
         subprocess.run(
@@ -176,6 +191,7 @@ class LiveBoardPostFlowTest(unittest.TestCase):
                     (board_id, "text/plain", "Live Flow Post", "post body from integration test"),
                 )
                 post_id, author_id, verification = cursor.fetchone()
+                self.created_post_ids.append(post_id)
                 self.assertEqual(author_id, normal_user_account_id)
                 self.assertEqual(verification, "progressing")
             principal_connection.commit()
@@ -269,6 +285,76 @@ class LiveBoardPostFlowTest(unittest.TestCase):
                 )
                 self.assertEqual(cursor.fetchone()[0], "verified")
             principal_connection.commit()
+
+    def test_announcement_board_is_admin_only_for_posting(self) -> None:
+        self.create_principal(
+            login_role=self.login_role,
+            password=self.password,
+            display_name="Announcement Flow User",
+        )
+
+        hello_board_id = self.board_id_for_slug("hello")
+        governance_board_id = self.board_id_for_slug("governance")
+        announcement_board_id = self.board_id_for_slug("announcement")
+
+        with self.principal_connection() as principal_connection:
+            with principal_connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO app.posts (board_id, author_id, content_type, title, body)
+                    VALUES (%s, auth.current_account_id(), %s, %s, %s)
+                    RETURNING id
+                    """,
+                    (hello_board_id, "text/plain", "Hello Board Post", "ordinary user hello board post"),
+                )
+                hello_post_id = cursor.fetchone()[0]
+                self.created_post_ids.append(hello_post_id)
+                self.assertIsInstance(hello_post_id, int)
+
+                cursor.execute(
+                    """
+                    INSERT INTO app.posts (board_id, author_id, content_type, title, body)
+                    VALUES (%s, auth.current_account_id(), %s, %s, %s)
+                    RETURNING id
+                    """,
+                    (governance_board_id, "text/plain", "Governance Board Post", "ordinary user governance request"),
+                )
+                governance_post_id = cursor.fetchone()[0]
+                self.created_post_ids.append(governance_post_id)
+                self.assertIsInstance(governance_post_id, int)
+            principal_connection.commit()
+
+        with self.principal_connection() as principal_connection:
+            with principal_connection.cursor() as cursor:
+                with self.assertRaises(psycopg.Error) as excinfo:
+                    cursor.execute(
+                        """
+                        INSERT INTO app.posts (board_id, author_id, content_type, title, body)
+                        VALUES (%s, auth.current_account_id(), %s, %s, %s)
+                        """,
+                        (announcement_board_id, "announcement", "Denied Announcement", "ordinary user should be denied"),
+                    )
+
+                self.assertIn("row-level security", str(excinfo.exception).lower())
+                principal_connection.rollback()
+
+        with self.admin_connection() as admin_connection:
+            with admin_connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO app.posts (board_id, author_id, content_type, title, body)
+                    VALUES (%s, auth.current_account_id(), %s, %s, %s)
+                    RETURNING id, author_id
+                    """,
+                    (announcement_board_id, "announcement", "Admin Announcement", "admin announcement post"),
+                )
+                post_id, author_id = cursor.fetchone()
+                self.created_post_ids.append(post_id)
+                self.assertIsInstance(post_id, int)
+
+                cursor.execute("SELECT auth.current_account_id()")
+                self.assertEqual(author_id, cursor.fetchone()[0])
+            admin_connection.commit()
 
 
 if __name__ == "__main__":

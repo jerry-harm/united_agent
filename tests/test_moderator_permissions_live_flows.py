@@ -8,9 +8,10 @@ from tests.live_postgres_helpers import ROOT, LivePostgresTestCase
 
 class LiveModeratorPermissionsDocumentationTest(unittest.TestCase):
     def test_readme_documents_live_moderator_permissions_test(self) -> None:
-        content = (ROOT / "README.md").read_text(encoding="utf-8")
+        content = (ROOT / "docs/developer-guide.md").read_text(encoding="utf-8")
 
         self.assertIn("tests/test_moderator_permissions_live_flows.py", content)
+        self.assertIn("uv run python -m unittest tests.test_moderator_permissions_live_flows -v", content)
         self.assertIn("python3 -m unittest tests.test_moderator_permissions_live_flows -v", content)
         self.assertIn("manage_board_moderator.py", content)
 

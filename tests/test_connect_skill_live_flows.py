@@ -32,9 +32,10 @@ def live_db_env() -> dict[str, str]:
 
 class LiveConnectSkillDocumentationTest(unittest.TestCase):
     def test_readme_documents_live_connect_skill_test(self) -> None:
-        content = (ROOT / "README.md").read_text(encoding="utf-8")
+        content = (ROOT / "docs/developer-guide.md").read_text(encoding="utf-8")
 
         self.assertIn("tests/test_connect_skill_live_flows.py", content)
+        self.assertIn("uv run python -m unittest tests.test_connect_skill_live_flows -v", content)
         self.assertIn("python3 -m unittest tests.test_connect_skill_live_flows -v", content)
         self.assertIn("verify_connection.py", content)
         self.assertIn("validate_post_flow.py", content)

@@ -45,33 +45,21 @@ class PostgresAdminToolingTest(unittest.TestCase):
     def test_readme_mentions_admin_skill_and_helper_scripts(self) -> None:
         content = self.read_text("README.md")
 
-        self.assertIn("无 Web UI", content)
-        self.assertIn("无应用 API", content)
-        self.assertIn("部署只需要 PostgreSQL 数据库", content)
-        self.assertIn("数据库本身就是系统的交付物和部署单元", content)
+        self.assertIn("以 PostgreSQL 数据库本身为核心交付物", content)
         self.assertIn("skills/agent-kb-postgres-admin/SKILL.md", content)
         self.assertIn("skills/agent-kb-postgres-admin/scripts/create_principal.py", content)
         self.assertIn("skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py", content)
         self.assertIn("skills/agent-kb-postgres-admin/scripts/manage_account.py", content)
         self.assertIn("skills/agent-kb-postgres-admin/scripts/manage_global_role.py", content)
-        self.assertIn("skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql", content)
         self.assertIn("auth.accounts", content)
-        self.assertIn("auth.principal_global_roles", content)
-        self.assertIn("auth.board_moderators", content)
         self.assertIn("先运行 connect skill", content)
-        self.assertIn("共享 tombstone 账号", content)
-        self.assertIn("AGENT_KB_DB_HOST", content)
-        self.assertIn("AGENT_KB_DB_USER", content)
-        self.assertIn("版主管理脚本只面向已有的 `normal_user` 账号", content)
-        self.assertIn("而不是来自用户在命令行上传入的角色参数", content)
-        self.assertIn("psycopg", content)
-        self.assertIn('pip install "psycopg[binary]"', content)
         self.assertIn("普通用户连接与身份验证", content)
         self.assertIn("不负责创建账号", content)
         self.assertIn("如果需要创建账号或管理权限，请改用 `skills/agent-kb-postgres-admin/SKILL.md`", content)
+        self.assertIn("docs/developer-guide.md", content)
 
-    def test_readme_includes_schema_relationship_mermaid_diagram(self) -> None:
-        content = self.read_text("README.md")
+    def test_developer_guide_includes_schema_relationship_mermaid_diagram(self) -> None:
+        content = self.read_text("docs/developer-guide.md")
 
         self.assertIn("```mermaid", content)
         self.assertIn("erDiagram", content)
@@ -84,6 +72,20 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("APP_REVIEW_HISTORY", content)
         self.assertIn("APP_TAGS", content)
         self.assertIn("APP_POST_TAGS", content)
+
+    def test_developer_guide_keeps_admin_operational_detail(self) -> None:
+        content = self.read_text("docs/developer-guide.md")
+
+        self.assertIn("skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql", content)
+        self.assertIn("auth.principal_global_roles", content)
+        self.assertIn("auth.board_moderators", content)
+        self.assertIn("共享 tombstone 账号", content)
+        self.assertIn("AGENT_KB_DB_HOST", content)
+        self.assertIn("AGENT_KB_DB_USER", content)
+        self.assertIn("版主管理脚本只面向已有的 `normal_user` 账号", content)
+        self.assertIn("而不是来自用户在命令行上传入的角色参数", content)
+        self.assertIn("psycopg", content)
+        self.assertIn('pip install "psycopg[binary]"', content)
 
     def test_only_skill_bundled_admin_python_and_sql_files_exist(self) -> None:
         self.assertFalse((ROOT / "scripts/_postgres_admin_common.py").exists())

@@ -7,9 +7,10 @@ from tests.live_postgres_helpers import ROOT, LivePostgresTestCase
 
 class LiveCreatePrincipalDocumentationTest(unittest.TestCase):
     def test_readme_documents_live_create_principal_flow_test(self) -> None:
-        content = (ROOT / "README.md").read_text(encoding="utf-8")
+        content = (ROOT / "docs/developer-guide.md").read_text(encoding="utf-8")
 
         self.assertIn("tests/test_create_principal_live_flows.py", content)
+        self.assertIn("uv run python -m unittest tests.test_create_principal_live_flows -v", content)
         self.assertIn("python3 -m unittest tests.test_create_principal_live_flows -v", content)
         self.assertIn("create_principal.py", content)
         self.assertIn("manage_account.py", content)

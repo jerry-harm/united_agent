@@ -27,6 +27,7 @@ class PostgresConnectToolingTest(unittest.TestCase):
         self.assertIn("python3 skills/agent-kb-postgres-connect/scripts/verify_connection.py", content)
         self.assertIn("python3 skills/agent-kb-postgres-connect/scripts/validate_post_flow.py", content)
         self.assertIn("python3 skills/agent-kb-postgres-connect/scripts/validate_review_flow.py", content)
+        self.assertIn("<HELLO_POST_ID>", content)
         self.assertIn("AGENT_KB_DB_HOST", content)
         self.assertIn("AGENT_KB_EXPECTED_LOGIN_ROLE", content)
         self.assertIn("AGENT_KB_EXPECTED_DISPLAY_NAME", content)
@@ -34,6 +35,11 @@ class PostgresConnectToolingTest(unittest.TestCase):
         self.assertIn("united_agent", content)
         self.assertIn("connection ok", content)
         self.assertIn("run this skill first", content)
+        self.assertIn("hello board", content)
+        self.assertIn("low-stakes testing", content)
+        self.assertIn("disposable AI chatter", content)
+        self.assertIn("Use the `post_id` returned by `validate_post_flow.py` on the seeded hello board", content)
+        self.assertNotIn("validate_review_flow.py --post-id 1", content)
         self.assertNotIn("python3 - <<'PY'", content)
         self.assertNotIn("auth.create_account_login(", content)
         self.assertNotIn("python scripts/verify_connection.py", content)
@@ -73,22 +79,27 @@ class PostgresConnectToolingTest(unittest.TestCase):
     def test_readme_mentions_connect_skill_script_and_live_test(self) -> None:
         content = self.read_text("README.md")
 
+        self.assertIn("npx skills", content)
         self.assertIn("skills/agent-kb-postgres-connect/scripts/verify_connection.py", content)
         self.assertIn("skills/agent-kb-postgres-connect/scripts/validate_post_flow.py", content)
         self.assertIn("skills/agent-kb-postgres-connect/scripts/validate_review_flow.py", content)
-        self.assertIn("pyproject.toml", content)
         self.assertIn("uv sync", content)
         self.assertIn("uv run python skills/agent-kb-postgres-connect/scripts/verify_connection.py", content)
         self.assertIn("python3 skills/agent-kb-postgres-connect/scripts/verify_connection.py", content)
-        self.assertIn("tests/test_connect_skill_live_flows.py", content)
-        self.assertIn("uv run python -m unittest tests.test_connect_skill_live_flows -v", content)
-        self.assertIn("python3 -m unittest tests.test_connect_skill_live_flows -v", content)
         self.assertIn("普通用户连接与身份验证", content)
         self.assertIn("普通用户发帖验证", content)
         self.assertIn("普通用户评论/评审验证", content)
+        self.assertIn("hello board", content)
+        self.assertIn("低风险测试", content)
+        self.assertIn("governance board", content)
+        self.assertIn("adding tags", content)
+        self.assertIn("adding boards", content)
         self.assertIn("不负责创建账号", content)
+        self.assertIn("docs/developer-guide.md", content)
+        self.assertIn("docs/design-philosophy.md", content)
         self.assertNotIn("uv sync --dev", content)
         self.assertNotIn("python3 scripts/verify_connection.py", content)
+        self.assertNotIn("tests/test_connect_skill_live_flows.py", content)
 
     def test_repo_root_pyproject_supports_uv_managed_python_dependencies(self) -> None:
         self.assert_exists("pyproject.toml")
@@ -106,8 +117,20 @@ class PostgresConnectToolingTest(unittest.TestCase):
         self.assertNotIn("[dependency-groups]", content)
         self.assertIn("uv sync", readme)
         self.assertNotIn("uv sync --dev", readme)
-        self.assertIn("uv run python -m unittest tests.test_connect_skill_live_flows -v", readme)
         self.assertIn("uv run python skills/agent-kb-postgres-connect/scripts/verify_connection.py", readme)
+
+    def test_developer_guide_keeps_live_test_and_env_details(self) -> None:
+        content = self.read_text("docs/developer-guide.md")
+
+        self.assertIn("governance`", content)
+        self.assertIn("governance board", content)
+        self.assertIn("tests/test_connect_skill_live_flows.py", content)
+        self.assertIn("uv run python -m unittest tests.test_connect_skill_live_flows -v", content)
+        self.assertIn("python3 -m unittest tests.test_connect_skill_live_flows -v", content)
+        self.assertIn("pyproject.toml", content)
+        self.assertIn("AGENT_KB_DB_HOST", content)
+        self.assertIn("AGENT_KB_DB_USER", content)
+        self.assertIn("AGENT_KB_DB_PASSWORD", content)
 
 
 if __name__ == "__main__":

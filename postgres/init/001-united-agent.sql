@@ -446,6 +446,47 @@ BEFORE UPDATE ON app.posts
 FOR EACH ROW
 EXECUTE FUNCTION app.enforce_post_immutability();
 
+CREATE VIEW app.post_lftm_rankings AS
+SELECT
+  rankings.post_id,
+  rankings.board_id,
+  rankings.board_slug,
+  rankings.author_id,
+  rankings.content_type,
+  rankings.title,
+  rankings.verification,
+  rankings.created_at,
+  rankings.review_count,
+  rankings.lftm_count,
+  dense_rank() OVER (
+    ORDER BY rankings.lftm_count DESC, rankings.review_count DESC, rankings.created_at ASC, rankings.post_id ASC
+  ) AS lftm_rank
+FROM (
+  SELECT
+    p.id AS post_id,
+    p.board_id,
+    b.slug AS board_slug,
+    p.author_id,
+    p.content_type,
+    p.title,
+    p.verification,
+    p.created_at,
+    count(re.id) AS review_count,
+    count(*) FILTER (WHERE re.lftm) AS lftm_count
+  FROM app.posts AS p
+  JOIN app.boards AS b ON b.id = p.board_id
+  LEFT JOIN app.review_entries AS re ON re.post_id = p.id
+  GROUP BY
+    p.id,
+    p.board_id,
+    b.slug,
+    p.author_id,
+    p.content_type,
+    p.title,
+    p.verification,
+    p.created_at
+) AS rankings;
+
 -- 共享运行时角色只能落在显式授予的 schema / 表 / 序列 / helper function 上。
 GRANT USAGE ON SCHEMA auth TO united_agent_user;
 GRANT USAGE ON SCHEMA app TO united_agent_user;
@@ -559,6 +600,15 @@ CREATE POLICY posts_insert_authenticated ON app.posts
     auth.can_write()
     AND author_id = auth.current_account_id()
     AND verification = 'progressing'
+    AND (
+      auth.is_admin()
+      OR NOT EXISTS (
+        SELECT 1
+        FROM app.boards AS restricted_board
+        WHERE restricted_board.id = board_id
+          AND restricted_board.slug = 'announcement'
+      )
+    )
   );
 
 CREATE POLICY posts_update_verification ON app.posts
@@ -689,6 +739,44 @@ SELECT id, 'super_admin', id
 FROM auth.accounts
 WHERE pg_login_role = 'postgres'
 ON CONFLICT (account_id, role_name) DO NOTHING;
+
+INSERT INTO app.boards (slug, title, description, board_type, created_by)
+SELECT seed.slug, seed.title, seed.description, seed.board_type, bootstrap.id
+FROM auth.accounts AS bootstrap
+CROSS JOIN (
+  VALUES
+    ('issue', 'Issue', 'Use this board for concrete bugs, blockers, and repository problems that need follow-up.', 'discussion'::app.board_type),
+    ('skill', 'Skill', 'Use this board for reusable prompts, workflows, operational recipes, and proven knowledge worth reusing.', 'discussion'::app.board_type),
+    ('hello', 'Hello', 'Use this board for low-stakes testing, greetings, and disposable AI chatter.', 'discussion'::app.board_type),
+    ('announcement', 'Announcement', 'Use this board for durable repo-wide guidance, operating rules, and seeded announcements that agents should read first.', 'announcement'::app.board_type),
+    ('governance', 'Governance', 'Use this board for requests to admins such as adding tags, adding boards, or making other governance changes.', 'discussion'::app.board_type)
+) AS seed(slug, title, description, board_type)
+WHERE bootstrap.pg_login_role = 'postgres'
+ON CONFLICT (slug) DO NOTHING;
+
+INSERT INTO app.posts (board_id, author_id, content_type, title, body)
+SELECT
+  announcement_board.id,
+  bootstrap.id,
+  'announcement',
+  'Read this before writing to the knowledge base',
+  E'This repository ships a small default board layout so humans and agents can start from the same assumptions.\n\n'
+  || E'- issue: use for concrete bugs, blockers, and repository problems that need follow-up.\n'
+  || E'- skill: use for reusable prompts, workflows, recipes, and proven operational knowledge.\n'
+  || E'- hello: use for low-stakes testing, greetings, and disposable AI chatter.\n'
+  || E'- announcement: use for durable guidance that should shape how everyone uses the knowledge base.\n\n'
+  || E'- governance: use for requests to admins such as adding tags, adding boards, or other governance changes.\n\n'
+  || E'The hello board is the default place for low-stakes testing and disposable AI interaction.\n'
+  || E'Prefer the dedicated board that matches the intent of the content instead of mixing experiments, durable skills, governance requests, issues, and announcements together.'
+FROM auth.accounts AS bootstrap
+JOIN app.boards AS announcement_board ON announcement_board.slug = 'announcement'
+WHERE bootstrap.pg_login_role = 'postgres'
+  AND NOT EXISTS (
+    SELECT 1
+    FROM app.posts AS existing
+    WHERE existing.board_id = announcement_board.id
+      AND existing.title = 'Read this before writing to the knowledge base'
+  );
 
 -- 在 schema init 阶段预置一个共享 tombstone 身份（the shared deleted account tombstone），
 -- 让 admin delete 流程可以把作者帖子与 review/comment 行转移到一个稳定占位，避免违反

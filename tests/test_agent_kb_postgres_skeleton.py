@@ -102,6 +102,51 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
         ):
             self.assertIn(expected, content)
 
+    def test_schema_restricts_announcement_posts_to_admin_sessions_only(self) -> None:
+        content = self.read_text("postgres/init/001-united-agent.sql")
+
+        self.assertIn("CREATE POLICY posts_insert_authenticated ON app.posts", content)
+        self.assertIn("restricted_board.slug = 'announcement'", content)
+        self.assertIn("restricted_board.id = board_id", content)
+        self.assertIn("auth.is_admin()", content)
+        self.assertIn("auth.can_write()", content)
+
+    def test_schema_seeds_default_boards_announcement_guidance_and_lftm_view(self) -> None:
+        content = self.read_text("postgres/init/001-united-agent.sql")
+
+        for expected in (
+            "INSERT INTO app.boards (slug, title, description, board_type, created_by)",
+            "('issue', 'Issue'",
+            "('skill', 'Skill'",
+            "('hello', 'Hello'",
+            "('announcement', 'Announcement'",
+            "('governance', 'Governance'",
+            "Use this board for low-stakes testing, greetings, and disposable AI chatter.",
+            "CREATE VIEW app.post_lftm_rankings AS",
+            "count(*) FILTER (WHERE re.lftm) AS lftm_count",
+            "dense_rank() OVER",
+            ") AS lftm_rank",
+            "INSERT INTO app.posts (board_id, author_id, content_type, title, body)",
+            "'announcement'",
+            "'Read this before writing to the knowledge base'",
+            "The hello board is the default place for low-stakes testing and disposable AI interaction.",
+            "- governance: use for requests to admins such as adding tags, adding boards, or other governance changes.",
+        ):
+            self.assertIn(expected, content)
+
+    def test_seeded_announcement_body_is_one_valid_sql_expression(self) -> None:
+        content = self.read_text("postgres/init/001-united-agent.sql")
+
+        self.assertIn(
+            "E'This repository ships a small default board layout so humans and agents can start from the same assumptions.\\n\\n'\n"
+            "  || E'- issue: use for concrete bugs, blockers, and repository problems that need follow-up.\\n'",
+            content,
+        )
+        self.assertIn(
+            "  || E'Prefer the dedicated board that matches the intent of the content instead of mixing experiments, durable skills, governance requests, issues, and announcements together.'",
+            content,
+        )
+
     def test_has_global_role_compares_against_function_parameter_not_column_name(self) -> None:
         content = self.read_text("postgres/init/001-united-agent.sql")
 
@@ -130,10 +175,14 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
         self.assertIn("AGENT_KB_EXPECTED_LOGIN_ROLE", content)
         self.assertIn("auth.accounts", content)
         self.assertIn("united_agent", content)
+        self.assertIn("hello board", content)
+        self.assertIn("<HELLO_POST_ID>", content)
+        self.assertIn("low-stakes testing", content)
         self.assertNotIn("python3 - <<'PY'", content)
         self.assertNotIn("python3 scripts/verify_connection.py", content)
         self.assertNotIn("psql postgresql://", content)
         self.assertNotIn("auth.create_account_login(", content)
+        self.assertNotIn("validate_review_flow.py --post-id 1", content)
 
 
 if __name__ == "__main__":
