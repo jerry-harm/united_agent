@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Review should use the same backend guideline entrypoint as implementation."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Review must confirm the wording still reflects DB-enforced authorization and SQL-backed helper contracts."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Review must keep the skill text aligned with the actual shipped file layout and wrapper boundaries."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Review must check that shipped skill wording matches reality and does not drift from asserted operator-facing contracts."}

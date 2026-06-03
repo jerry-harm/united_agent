@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend spec index points to the active guidelines for skill-backed admin helper docs."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Defines that helper SQL derives privilege from auth helpers inside the database and documents the SQL-file-backed admin helper contract."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Keeps the skill wording aligned with the shipped skills/scripts/sql layout and the thin-wrapper model."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Requires README and shipped skills to match repo reality and warns against casual operator-contract drift."}
