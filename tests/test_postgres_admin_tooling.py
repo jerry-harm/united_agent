@@ -1,5 +1,10 @@
+import importlib.util
+import os
 from pathlib import Path
+import sys
+import types
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,6 +16,30 @@ class PostgresAdminToolingTest(unittest.TestCase):
 
     def assert_exists(self, relative_path: str) -> None:
         self.assertTrue((ROOT / relative_path).exists(), relative_path)
+
+    def load_admin_common_module(self):
+        module_path = ROOT / "skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py"
+        spec = importlib.util.spec_from_file_location("_postgres_admin_common_test", module_path)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+
+        fake_psycopg = types.ModuleType("psycopg")
+        fake_psycopg.connect = lambda *args, **kwargs: None
+        fake_psycopg.Connection = object
+        fake_psycopg.Cursor = object
+        fake_psycopg_sql = types.ModuleType("psycopg.sql")
+        fake_psycopg_sql.Literal = lambda value: value
+
+        with patch.dict(
+            sys.modules,
+            {
+                "psycopg": fake_psycopg,
+                "psycopg.sql": fake_psycopg_sql,
+            },
+        ):
+            spec.loader.exec_module(module)
+        return module
 
     def test_admin_skill_documents_safer_operational_policy(self) -> None:
         content = self.read_text("skills/agent-kb-postgres-admin/SKILL.md")
@@ -40,9 +69,10 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("os.environ", content)
         self.assertIn("do not edit shipped skill files to store secrets", content)
         self.assertIn("typically as `DATABASE_URL`", content)
-        self.assertIn("Compatibility note: today's admin helpers still read the concrete split `AGENT_KB_*` database env vars", content)
+        self.assertIn("Admin connection contract: shipped admin helpers require `DATABASE_URL`", content)
         self.assertIn("prefer one-off account passwords through `--new-password`", content)
         self.assertIn("AGENT_KB_NEW_PRINCIPAL_PASSWORD", content)
+        self.assertIn("The database connection itself still comes from `DATABASE_URL`", content)
         self.assertIn("delete reassigns posts and review/comment rows to the shared tombstone account", content)
         self.assertIn("compatibility:", content)
         self.assertIn("psycopg", content)
@@ -50,6 +80,7 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertNotIn("python3 scripts/create_principal.py", content)
         self.assertNotIn("python3 scripts/manage_board_moderator.py assign", content)
         self.assertNotIn("Repo-root `scripts/` may still exist", content)
+        self.assertNotIn("AGENT_KB_DB_HOST", content)
 
     def test_readme_mentions_admin_skill_and_helper_scripts(self) -> None:
         content = self.read_text("README.md")
@@ -100,8 +131,8 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("auth.principal_global_roles", content)
         self.assertIn("auth.board_moderators", content)
         self.assertIn("共享 tombstone 账号", content)
-        self.assertIn("AGENT_KB_DB_HOST", content)
-        self.assertIn("AGENT_KB_DB_USER", content)
+        self.assertIn("DATABASE_URL", content)
+        self.assertIn("admin helper 现在只接受 `DATABASE_URL`", content)
         self.assertIn("版主管理脚本只面向已有的 `normal_user` 账号", content)
         self.assertIn("而不是来自用户在命令行上传入的角色参数", content)
         self.assertIn("psycopg", content)
@@ -131,19 +162,40 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_global_role_grant.sql")
         self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_global_role_revoke.sql")
         self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_global_role_list.sql")
+        self.assertFalse((ROOT / ".agents/skills/agent-kb-postgres-admin").exists())
+        self.assertFalse((ROOT / ".agents/skills/agent-kb-postgres-connect").exists())
 
-    def test_common_python_helper_uses_env_defaults(self) -> None:
+    def test_common_python_helper_uses_database_url(self) -> None:
         content = self.read_text("skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py")
 
-        self.assertIn("AGENT_KB_DB_HOST", content)
-        self.assertIn("AGENT_KB_DB_USER", content)
-        self.assertIn("AGENT_KB_DB_PASSWORD", content)
-        self.assertIn('os.environ.get("AGENT_KB_DB_PORT", "5432")', content)
-        self.assertIn('os.environ.get("AGENT_KB_DB_NAME", "united_agent")', content)
+        self.assertIn('require_env("DATABASE_URL")', content)
+        self.assertIn("psycopg.connect(database_url())", content)
         self.assertIn("import psycopg", content)
         self.assertIn("cursor.execute", content)
         self.assertIn("sql_path.read_text", content)
         self.assertIn("autocommit = False", content)
+        self.assertNotIn("AGENT_KB_DB_HOST", content)
+
+    def test_common_python_helper_fails_fast_without_database_url(self) -> None:
+        module = self.load_admin_common_module()
+
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(SystemExit) as context:
+                module.database_url()
+
+        self.assertEqual(
+            str(context.exception),
+            "missing required environment variable: DATABASE_URL",
+        )
+
+    def test_open_connection_uses_database_url_conninfo(self) -> None:
+        module = self.load_admin_common_module()
+
+        with patch.dict(os.environ, {"DATABASE_URL": "postgres://example"}, clear=True):
+            with patch.object(module.psycopg, "connect") as connect:
+                module.open_connection()
+
+        connect.assert_called_once_with("postgres://example")
 
     def test_create_principal_python_script_uses_sql_file(self) -> None:
         content = self.read_text("skills/agent-kb-postgres-admin/scripts/create_principal.py")

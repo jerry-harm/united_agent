@@ -39,15 +39,17 @@ uv sync
 pip install "psycopg[binary]"
 ```
 
-连接参数：
+连接参数（推荐统一使用 `DATABASE_URL`）：
 
 ```bash
-export AGENT_KB_DB_HOST=localhost
-export AGENT_KB_DB_PORT=5432
-export AGENT_KB_DB_NAME=united_agent
-export AGENT_KB_DB_USER=postgres
-export AGENT_KB_DB_PASSWORD=postgres
+export DATABASE_URL=postgres://postgres:postgres@localhost:5432/united_agent
 ```
+
+其中：
+
+- connect helper 仍兼容旧的拆分 `AGENT_KB_DB_*` 变量
+- admin helper 现在只接受 `DATABASE_URL` 作为数据库连接入口
+- `AGENT_KB_NEW_PRINCIPAL_PASSWORD` 仅保留给 `create_principal.py` 作为新账号密码的历史 fallback
 
 ## Connect skill 与普通用户验证
 
@@ -112,6 +114,8 @@ python3 skills/agent-kb-postgres-admin/scripts/create_principal.py \
   --global-role normal_user \
   --login-role example_moderator
 ```
+
+运行这些 admin 脚本前，请确保当前 shell / agent runtime 已注入 `DATABASE_URL`。
 
 底层 SQL 文件：`skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql`
 

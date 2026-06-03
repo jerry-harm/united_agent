@@ -1,6 +1,6 @@
 ---
 name: agent-kb-postgres-admin
-description: Use when a user or agent needs to do privileged PostgreSQL account or board-moderator administration for this repository, especially account creation with the project's safer admin policy, account disable/delete lifecycle, global role changes, board moderator management, and announcement approval (`posts.verification = 'verified'`) so AI agents will read the announcement. Operators are expected to run `connect` first; this skill does not import code from `connect` but shares the same environment-variable contract.
+description: Use when a user or agent needs to do privileged PostgreSQL account or board-moderator administration for this repository, especially account creation with the project's safer admin policy, account disable/delete lifecycle, global role changes, board moderator management, and announcement approval (`posts.verification = 'verified'`) so AI agents will read the announcement. Operators are expected to run `connect` first; this skill does not import code from `connect` but shares the same primary runtime connection contract.
 compatibility:
   - Python 3
   - psycopg
@@ -32,12 +32,12 @@ The calling operator/agent provides secrets at runtime. The scripts read them fr
 Preferred operational rule:
 
 - keep the canonical connection secret in your own agent tool's runtime secret mechanism, typically as `DATABASE_URL`
-- if your invocation layer needs to translate that runtime secret into the concrete env expected by the helper, do that at invocation time rather than by editing repo files
+- export or inject `DATABASE_URL` for the helper itself at invocation time rather than editing repo files
 - do not commit database credentials or new-account passwords into repo files
 - do not edit shipped skill files to store secrets
 - prefer one-off account passwords through `--new-password`
 
-Compatibility note: today's admin helpers still read the concrete split `AGENT_KB_*` database env vars plus the fallback password env `AGENT_KB_NEW_PRINCIPAL_PASSWORD`. Treat those names as helper-level compatibility details, not the recommended place to teach operators where secrets should live.
+Admin connection contract: shipped admin helpers require `DATABASE_URL` for the database connection. The only legacy env fallback kept here is `AGENT_KB_NEW_PRINCIPAL_PASSWORD` for the new account password when `--new-password` is not provided.
 
 ## Privilege Policy
 
@@ -82,7 +82,7 @@ uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/cr
   --login-role example_admin
 ```
 
-Pass the new account password with `--new-password`. If your runtime only injects env vars, the helper also accepts the legacy `AGENT_KB_NEW_PRINCIPAL_PASSWORD` fallback. The Python entrypoint reads `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql` and executes it through `psycopg`.
+Pass the new account password with `--new-password`. If your runtime only injects env vars, the helper also accepts the legacy `AGENT_KB_NEW_PRINCIPAL_PASSWORD` fallback. The database connection itself still comes from `DATABASE_URL`. The Python entrypoint reads `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql` and executes it through `psycopg`.
 
 Reminder: this helper creates ongoing managed accounts. It does not create the bootstrap `super_admin`; that identity comes from database initialization.
 

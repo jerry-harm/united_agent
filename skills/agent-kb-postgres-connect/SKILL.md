@@ -10,7 +10,7 @@ compatibility:
 
 Use this skill for the ordinary-user connection and identity-verification path in the running PostgreSQL knowledge base. It is the base skill for ordinary-user connection, identity verification, and normal-flow validation (post, review/comment) before any privileged operation through the `admin` skill.
 
-`connect` is the base skill. Every operator should run it before attempting any privileged operation through the `admin` skill. The `admin` skill does not import code from `connect`, but it shares the same environment-variable contract and assumes the operator can already connect and resolve to an `active` `auth.accounts` row.
+`connect` is the base skill. Every operator should run it before attempting any privileged operation through the `admin` skill. The `admin` skill does not import code from `connect`, but it shares the same primary runtime connection contract and assumes the operator can already connect and resolve to an `active` `auth.accounts` row.
 
 If you already have host, database, login role, and password, this skill ships the standard Python-first way to prove the credentials work, resolve to the expected account, and exercise the normal-user write paths.
 

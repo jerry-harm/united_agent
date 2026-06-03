@@ -94,12 +94,8 @@ SELECT id FROM auth.accounts WHERE pg_login_role = session_user;
 
 ### 3. Contracts
 - Required environment keys:
-  - `AGENT_KB_DB_HOST`
-  - `AGENT_KB_DB_USER`
-  - `AGENT_KB_DB_PASSWORD`
+  - `DATABASE_URL`
 - Optional environment keys:
-  - `AGENT_KB_DB_PORT` (default `5432`)
-  - `AGENT_KB_DB_NAME` (default `united_agent`)
   - `AGENT_KB_NEW_PRINCIPAL_PASSWORD` (used by `create_principal.py`)
 - Runtime dependency:
   - Python environment with `psycopg` installed (recommended install command: `pip install "psycopg[binary]"`)
@@ -112,7 +108,7 @@ SELECT id FROM auth.accounts WHERE pg_login_role = session_user;
   - If a helper SQL file uses a side-effecting CTE, the final statement must consume that CTE so PostgreSQL cannot skip the side effect during execution.
 
 ### 4. Validation & Error Matrix
-- missing required DB env var -> exit with `missing required environment variable: <NAME>`
+- missing required DB env var -> exit with `missing required environment variable: DATABASE_URL`
 - invalid `--login-role` format -> exit with `login role must match PostgreSQL role naming rules`
 - missing principal password -> exit with `provide --new-password or set AGENT_KB_NEW_PRINCIPAL_PASSWORD`
 - `admin` creating anything except `normal_user` -> raise `policy violation: admin may create only normal_user accounts`
@@ -130,7 +126,7 @@ SELECT id FROM auth.accounts WHERE pg_login_role = session_user;
 - Static tooling test must prove:
   - the shipped Python entrypoints exist
   - the shipped SQL files exist
-  - the shared runner uses env defaults for port/name
+  - the shared runner requires `DATABASE_URL`
   - the shared runner imports `psycopg`, reads SQL files from disk, and executes them through a cursor
   - account creation SQL targets `auth.accounts` and `auth.principal_global_roles`
   - account creation SQL consumes the login-creation CTE so `auth.create_account_login(...)` cannot be optimized away

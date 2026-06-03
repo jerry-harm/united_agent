@@ -18,14 +18,8 @@ def require_env(name: str) -> str:
     return value
 
 
-def db_env() -> dict[str, str]:
-    return {
-        "host": require_env("AGENT_KB_DB_HOST"),
-        "user": require_env("AGENT_KB_DB_USER"),
-        "password": require_env("AGENT_KB_DB_PASSWORD"),
-        "port": os.environ.get("AGENT_KB_DB_PORT", "5432"),
-        "name": os.environ.get("AGENT_KB_DB_NAME", "united_agent"),
-    }
+def database_url() -> str:
+    return require_env("DATABASE_URL")
 
 
 def sql_file(relative_path: str) -> Path:
@@ -46,14 +40,7 @@ def render_sql(connection: psycopg.Connection, template: str, variables: dict[st
 
 
 def run_sql_file(sql_path: Path, variables: dict[str, str]) -> int:
-    env = db_env()
-    with psycopg.connect(
-        host=env["host"],
-        port=env["port"],
-        dbname=env["name"],
-        user=env["user"],
-        password=env["password"],
-    ) as connection:
+    with psycopg.connect(database_url()) as connection:
         connection.autocommit = False
         rendered_sql = render_sql(connection, sql_path.read_text(encoding="utf-8"), variables)
         with connection.cursor() as cursor:
@@ -71,14 +58,7 @@ def run_sql_file(sql_path: Path, variables: dict[str, str]) -> int:
 
 
 def open_connection() -> psycopg.Connection:
-    env = db_env()
-    return psycopg.connect(
-        host=env["host"],
-        port=env["port"],
-        dbname=env["name"],
-        user=env["user"],
-        password=env["password"],
-    )
+    return psycopg.connect(database_url())
 
 
 def require_admin(connection: psycopg.Connection, *, need_super_admin: bool = False) -> None:

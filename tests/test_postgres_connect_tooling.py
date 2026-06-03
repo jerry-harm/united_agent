@@ -154,9 +154,9 @@ class PostgresConnectToolingTest(unittest.TestCase):
         self.assertIn("uv run python -m unittest tests.test_connect_skill_live_flows -v", content)
         self.assertIn("python3 -m unittest tests.test_connect_skill_live_flows -v", content)
         self.assertIn("pyproject.toml", content)
-        self.assertIn("AGENT_KB_DB_HOST", content)
-        self.assertIn("AGENT_KB_DB_USER", content)
-        self.assertIn("AGENT_KB_DB_PASSWORD", content)
+        self.assertIn("DATABASE_URL", content)
+        self.assertIn("connect helper 仍兼容旧的拆分 `AGENT_KB_DB_*` 变量", content)
+        self.assertIn("admin helper 现在只接受 `DATABASE_URL` 作为数据库连接入口", content)
 
 
 if __name__ == "__main__":
