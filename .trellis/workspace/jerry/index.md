@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 28
-- **Last Active**: 2026-06-03
+- **Total Sessions**: 29
+- **Last Active**: 2026-06-04
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~946 | Active |
+| `journal-1.md` | ~979 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 29 | 2026-06-04 | Rewrite KB docs and skill secret guidance | `ff4c0e9` | `main` |
 | 28 | 2026-06-03 | Compress connect & admin SKILL.md; archive postgres-admin-skill-wording | `c46e5b3`, `da17076` | `main` |
 | 27 | 2026-06-03 | Compress connect & admin SKILL.md — remove inline SQL, simplify triggers, all-uv | `c46e5b3` | `main` |
 | 26 | 2026-06-03 | Complete connect SKILL DB interaction triggers - 11 scenarios | `a2b0297` | `main` |

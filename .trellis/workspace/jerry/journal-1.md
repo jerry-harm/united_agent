@@ -944,3 +944,36 @@ Compress both SKILLs (connect 391→191, admin 193→175): remove inline SQL, si
 ### Next Steps
 
 - None - task complete
+
+
+## Session 29: Rewrite KB docs and skill secret guidance
+
+**Date**: 2026-06-04
+**Task**: Rewrite KB docs and skill secret guidance
+**Branch**: `main`
+
+### Summary
+
+Rewrote README in Chinese and both shipped skills in English to clarify bootstrap postgres->super_admin behavior, center runtime secret handling on DATABASE_URL and agent-provided env injection, and stop recommending AGENT_KB_* in user-facing docs; updated wording tests and verified the unittest suite.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ff4c0e9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
