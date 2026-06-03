@@ -53,6 +53,7 @@ Quickstart:
 ```bash
 uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/verify_connection.py
 python3 skills/agent-kb-postgres-connect/scripts/verify_connection.py
+python3 skills/agent-kb-postgres-connect/scripts/list_content.py --list-boards
 python3 skills/agent-kb-postgres-connect/scripts/validate_post_flow.py --board-id <HELLO_BOARD_ID>
 python3 skills/agent-kb-postgres-connect/scripts/validate_review_flow.py --post-id <HELLO_POST_ID>
 ```
