@@ -33,6 +33,7 @@ There is no dedicated lint config or type-checker config in the repo yet. Curren
 - Keep privileged business rules in SQL and execute them via checked-in files.
 - If the repo uses a root `pyproject.toml` for uv, keep it dependency-only for shipped scripts/tests; do not imply this repo is a packaged Python application unless that becomes true.
 - Reuse the shipped skill-local common helper (for example `skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py`) for env loading, SQL rendering, and transaction execution instead of re-implementing connection code.
+- Reuse a shared live-test helper module when multiple PostgreSQL integration suites need the same env loading, connection, script-runner, and cleanup behavior.
 - If a shipped skill documents executable helper scripts, bundle those helpers under the skill directory and keep docs/tests aligned with that shipped entrypoint.
 - Use placeholder rendering via `sql.Literal(...).as_string(connection)` rather than manual string concatenation.
 - Keep Python entrypoints thin: parse args, validate obvious inputs, delegate to SQL.
@@ -58,6 +59,7 @@ Expected testing style today:
 
 - static contract checks against SQL, README, and skill files
 - shipped skill-bundled entrypoints should be checked both statically and, when practical, through live PostgreSQL integration tests
+- when live permission coverage expands, split suites by permission theme so failures map cleanly to account creation, moderator flows, or content-boundary behavior
 - no fake framework-specific test scaffolding
 - explicit assertions on important strings and file presence
 
@@ -67,6 +69,7 @@ When changing authorization logic, ensure tests still prove:
 - `session_user` remains the identity source
 - helper scripts still use checked-in SQL files
 - live authorization tests distinguish between RLS denials that raise an error and denials that surface as zero affected rows
+- content-table live coverage checks `read` visibility separately from higher-priority `update/delete` boundaries
 
 ---
 
