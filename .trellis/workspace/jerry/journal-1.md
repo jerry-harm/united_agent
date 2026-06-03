@@ -646,3 +646,36 @@ Replaced the README npx skills install block with two verified npx skills add co
 ### Next Steps
 
 - None - task complete
+
+
+## Session 20: Add board listing and announcement viewing to connect skill
+
+**Date**: 2026-06-03
+**Task**: Add board listing and announcement viewing to connect skill
+**Branch**: `main`
+
+### Summary
+
+Added list_content.py with --list-boards and --announcements modes, plus two local SQL files; added render_sql to _postgres_connect_common.py; updated SKILL.md with new script docs and a Writing SQL Directly section encouraging agents to write SQL directly against the schema.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4721f94` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
