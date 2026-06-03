@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend spec index for the relevant database, error-handling, and quality guides."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Primary contract for PostgreSQL schema, RLS helpers, account-state gating, and admin helper behavior."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Permission and policy failures must keep consistent SQL error behavior while RLS/admin flows change."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Implementation must preserve required static/live authorization coverage and quality checks."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Confirms the canonical bootstrap SQL and helper script paths being updated."}
