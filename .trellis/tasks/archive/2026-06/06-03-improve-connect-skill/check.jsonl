@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend documentation and review standards for the shipped connect skill"}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Checks that bundled skill scripts and tests live in the correct paths"}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Verifies the connect script still follows the auth and connection contract"}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Verifies script thinness, live integration coverage, and README/skill contract alignment"}

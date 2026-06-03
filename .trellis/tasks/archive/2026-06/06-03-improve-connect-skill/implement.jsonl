@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend surface overview and required doc standards for shipped skills, scripts, and tests"}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Defines where skill-bundled Python scripts and regression tests belong"}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Covers the PostgreSQL connection and auth contract used by the connect skill"}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Defines thin wrapper conventions, bundled script behavior, and testing expectations"}
