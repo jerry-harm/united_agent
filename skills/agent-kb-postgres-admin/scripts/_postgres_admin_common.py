@@ -18,6 +18,13 @@ def require_env(name: str) -> str:
     return value
 
 
+def load_secret_from_env_name(env_name: str) -> str:
+    name = env_name.strip()
+    if not name:
+        raise SystemExit("explicit environment variable name is required")
+    return require_env(name)
+
+
 def database_url() -> str:
     return require_env("DATABASE_URL")
 

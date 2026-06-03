@@ -60,6 +60,8 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             "CREATE FUNCTION auth.can_manage_account(target_account_id bigint)",
             "CREATE FUNCTION auth.can_write()",
             "CREATE FUNCTION auth.create_account_login(",
+            "CREATE FUNCTION auth.change_own_password(",
+            "CREATE FUNCTION auth.reset_managed_account_password(",
             "CREATE TRIGGER trg_review_history",
             "CREATE TRIGGER trg_posts_immutable",
         ):

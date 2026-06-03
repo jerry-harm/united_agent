@@ -26,6 +26,7 @@ class PostgresConnectToolingTest(unittest.TestCase):
         self.assertIn("create accounts", content)
         self.assertIn("grant or revoke roles", content)
         self.assertIn('uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/verify_connection.py', content)
+        self.assertIn('uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/change_password.py --new-password-env AGENT_KB_NEW_PASSWORD', content)
         self.assertIn('uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/list_content.py --list-boards', content)
         self.assertIn('uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/validate_post_flow.py', content)
         self.assertIn('uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/validate_review_flow.py', content)
@@ -38,6 +39,8 @@ class PostgresConnectToolingTest(unittest.TestCase):
         self.assertIn("os.environ", content)
         self.assertIn("do not commit database credentials into repo files", content)
         self.assertIn("do not edit shipped skill files to store credentials", content)
+        self.assertIn("--new-password-env", content)
+        self.assertIn("No fixed password env fallback is built in", content)
         self.assertIn("auth.accounts", content)
         self.assertIn("united_agent", content)
         self.assertIn("connection ok", content)
@@ -55,15 +58,24 @@ class PostgresConnectToolingTest(unittest.TestCase):
         self.assertNotIn("python3 - <<'PY'", content)
         self.assertNotIn("auth.create_account_login(", content)
         self.assertNotIn("python scripts/verify_connection.py", content)
-
+    
     def test_connect_skill_bundles_local_scripts(self) -> None:
         self.assert_exists("skills/agent-kb-postgres-connect/scripts/_postgres_connect_common.py")
         self.assert_exists("skills/agent-kb-postgres-connect/scripts/verify_connection.py")
+        self.assert_exists("skills/agent-kb-postgres-connect/scripts/change_password.py")
         self.assert_exists("skills/agent-kb-postgres-connect/scripts/validate_post_flow.py")
         self.assert_exists("skills/agent-kb-postgres-connect/scripts/validate_review_flow.py")
         self.assert_exists("skills/agent-kb-postgres-connect/scripts/list_content.py")
         self.assert_exists("skills/agent-kb-postgres-connect/scripts/sql/list_content_list_boards.sql")
         self.assert_exists("skills/agent-kb-postgres-connect/scripts/sql/list_content_announcements.sql")
+
+    def test_change_password_script_uses_shared_helper_and_explicit_password_env(self) -> None:
+        content = self.read_text("skills/agent-kb-postgres-connect/scripts/change_password.py")
+
+        self.assertIn("from _postgres_connect_common import connect, load_secret_from_env_name", content)
+        self.assertIn("--new-password-env", content)
+        self.assertIn("auth.change_own_password", content)
+        self.assertIn("password changed", content)
 
     def test_connect_script_uses_skill_local_helper_and_expected_checks(self) -> None:
         content = self.read_text("skills/agent-kb-postgres-connect/scripts/verify_connection.py")
@@ -90,6 +102,8 @@ class PostgresConnectToolingTest(unittest.TestCase):
         self.assertIn("session_user", content)
         self.assertIn("auth.current_account_id()", content)
         self.assertIn("auth.current_account_status()", content)
+        self.assertIn("load_secret_from_env_name", content)
+        self.assertIn("explicit environment variable name is required", content)
         self.assertIn("render_sql", content)
         self.assertIn("Path", content)
 
@@ -100,6 +114,7 @@ class PostgresConnectToolingTest(unittest.TestCase):
         self.assertIn("npx skills add jerry-harm/united_agent/skills --skill agent-kb-postgres-connect", content)
         self.assertIn("npx skills add jerry-harm/united_agent/skills --skill agent-kb-postgres-admin", content)
         self.assertIn("skills/agent-kb-postgres-connect/scripts/verify_connection.py", content)
+        self.assertIn("skills/agent-kb-postgres-connect/scripts/change_password.py", content)
         self.assertIn("skills/agent-kb-postgres-connect/scripts/validate_post_flow.py", content)
         self.assertIn("skills/agent-kb-postgres-connect/scripts/validate_review_flow.py", content)
         self.assertIn("uv run python skills/agent-kb-postgres-connect/scripts/verify_connection.py", content)
@@ -109,6 +124,7 @@ class PostgresConnectToolingTest(unittest.TestCase):
         self.assertIn("不要把数据库密码、新账号密码写进仓库文件", content)
         self.assertIn("不要为了保存 secrets 去修改 shipped skill files", content)
         self.assertIn("普通用户连接与身份验证", content)
+        self.assertIn("普通用户自助改密码", content)
         self.assertIn("普通用户发帖验证", content)
         self.assertIn("普通用户评论/评审验证", content)
         self.assertIn("hello board", content)
@@ -155,6 +171,7 @@ class PostgresConnectToolingTest(unittest.TestCase):
         self.assertIn("python3 -m unittest tests.test_connect_skill_live_flows -v", content)
         self.assertIn("pyproject.toml", content)
         self.assertIn("DATABASE_URL", content)
+        self.assertIn("change_password.py --new-password-env", content)
         self.assertIn("connect helper 仍兼容旧的拆分 `AGENT_KB_DB_*` 变量", content)
         self.assertIn("admin helper 现在只接受 `DATABASE_URL` 作为数据库连接入口", content)
 

@@ -36,8 +36,9 @@ Preferred operational rule:
 - do not commit database credentials or new-account passwords into repo files
 - do not edit shipped skill files to store secrets
 - prefer one-off account passwords through `--new-password`
+- prefer explicit env-variable-name flags such as `--new-password-env` when resetting an existing account password
 
-Admin connection contract: shipped admin helpers require `DATABASE_URL` for the database connection. The only legacy env fallback kept here is `AGENT_KB_NEW_PRINCIPAL_PASSWORD` for the new account password when `--new-password` is not provided.
+Admin connection contract: shipped admin helpers require `DATABASE_URL` for the database connection. The only legacy env fallback kept here is `AGENT_KB_NEW_PRINCIPAL_PASSWORD` for the new account password when `--new-password` is not provided. No fixed password env fallback exists for reset-password.
 
 ## Privilege Policy
 
@@ -95,6 +96,17 @@ uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/ma
 ```
 
 A disabled account stops being able to mutate state because every write path still requires `auth.can_write()`, which fails for non-active accounts.
+
+## Reset An Account Password
+
+Use `manage_account.py reset-password` to reset the PostgreSQL login password for an existing managed account. Targeting is `--account-id` only, and the new password must come from an explicit env-variable-name flag.
+
+```bash
+export AGENT_KB_TARGET_PASSWORD='replace-me'
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_account.py reset-password --account-id 2 --new-password-env AGENT_KB_TARGET_PASSWORD
+```
+
+This keeps the password authority in PostgreSQL and stays non-interactive for agent/CLI usage on Windows and Unix-like runtimes.
 
 ## Delete An Account
 

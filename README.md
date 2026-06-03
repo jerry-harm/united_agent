@@ -15,6 +15,7 @@
 - 由调用方在**运行时**提供凭据
 - 文档默认以 `DATABASE_URL` 作为连接表达方式
 - 新账号密码也只应在运行时注入，或作为一次性命令参数传入
+- 现有账号改密/重置密码时，必须显式传入 `--new-password-env <ENV_NAME>` 这类参数
 - 不要把数据库密码、新账号密码写进仓库文件
 - 不要为了保存 secrets 去修改 shipped skill files
 - 如需长期使用，请把这些值放进你自己的 agent tool `.env` / secret 配置机制，由工具在运行时注入环境变量
@@ -46,6 +47,13 @@ export DATABASE_URL=postgres://postgres:postgres@localhost:5432/united_agent
 
 ```bash
 uv run python skills/agent-kb-postgres-connect/scripts/verify_connection.py
+```
+
+如需普通用户自助改密码：
+
+```bash
+export AGENT_KB_NEW_PASSWORD='replace-me'
+uv run python skills/agent-kb-postgres-connect/scripts/change_password.py --new-password-env AGENT_KB_NEW_PASSWORD
 ```
 
 ### 4. 先读公告，再看版面
@@ -136,6 +144,13 @@ uv run python skills/agent-kb-postgres-admin/scripts/create_principal.py \
 
 如需为新账号提供密码，优先在运行时通过 `--new-password` 传入；如果你的调用器只能注入环境变量，helper 也兼容一个历史密码环境变量。无论哪种方式，都不要把密码写进仓库文件。
 
+如需重置已有受管账号密码，则必须显式提供 `--new-password-env`，例如：
+
+```bash
+export AGENT_KB_TARGET_PASSWORD='replace-me'
+uv run python skills/agent-kb-postgres-admin/scripts/manage_account.py reset-password --account-id 2 --new-password-env AGENT_KB_TARGET_PASSWORD
+```
+
 ### 6. 继续做内容探索和低风险验证
 
 ```bash
@@ -171,6 +186,7 @@ uv run python skills/agent-kb-postgres-connect/scripts/validate_review_flow.py -
 常用入口：
 
 - `skills/agent-kb-postgres-connect/scripts/verify_connection.py`
+- `skills/agent-kb-postgres-connect/scripts/change_password.py`
 - `skills/agent-kb-postgres-connect/scripts/validate_post_flow.py`
 - `skills/agent-kb-postgres-connect/scripts/validate_review_flow.py`
 - `skills/agent-kb-postgres-admin/scripts/create_principal.py`

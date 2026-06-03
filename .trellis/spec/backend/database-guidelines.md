@@ -153,6 +153,72 @@ with psycopg.connect(...) as connection:
 
 ---
 
+## Scenario: Password change and admin reset helpers
+
+### 1. Scope / Trigger
+- Trigger: the repository now ships password-management flows for both ordinary users and privileged operators while keeping PostgreSQL login roles as the single password authority.
+
+### 2. Signatures
+- Database helpers:
+  - `auth.change_own_password(p_new_password text) returns text`
+  - `auth.reset_managed_account_password(p_target_account_id bigint, p_new_password text) returns text`
+- Python entrypoints:
+  - `python3 skills/agent-kb-postgres-connect/scripts/change_password.py --new-password-env <ENV_NAME>`
+  - `python3 skills/agent-kb-postgres-admin/scripts/manage_account.py reset-password --account-id <id> --new-password-env <ENV_NAME>`
+
+### 3. Contracts
+- Password state continues to live only in PostgreSQL login roles; do not introduce an app-level password table.
+- Self-service password change must:
+  - operate on the current authenticated login only
+  - derive the target login from `session_user`
+  - require an active account via `auth.can_write()`
+  - accept the new password through an explicit env-variable-name flag, not a fixed fallback env name
+- Admin reset must:
+  - target accounts by `account_id` only
+  - enforce existing `auth.can_manage_account(target_account_id)` boundaries
+  - refuse `super_admin` targets through the same management boundary
+  - accept the new password through an explicit env-variable-name flag, not a fixed fallback env name
+- CLI wrappers must stay non-interactive so agent runtimes and Windows shells can drive them predictably.
+
+### 4. Validation & Error Matrix
+- missing `--new-password-env` value -> CLI argument validation error
+- named password env var missing or blank -> exit with `missing required environment variable: <ENV_NAME>`
+- self-service caller inactive -> deny via `auth.can_write()` path before password mutation
+- admin reset caller lacking permission on target -> raise policy violation through `auth.can_manage_account(...)`
+- empty new password -> raise `password must not be empty`
+
+### 5. Good/Base/Bad Cases
+- Good: an active ordinary user rotates their own PostgreSQL login password through `change_password.py --new-password-env AGENT_KB_NEW_PASSWORD`.
+- Good: an `admin` resets a `normal_user` password through `manage_account.py reset-password --account-id <id> --new-password-env AGENT_KB_RESET_PASSWORD`.
+- Base: a `super_admin` resets an `admin` account password through the same reset-password flow.
+- Bad: exposing a fixed fallback env name such as `AGENT_KB_NEW_PASSWORD` in the wrapper contract.
+- Bad: allowing self-service change to target any login other than `session_user`.
+
+### 6. Tests Required
+- Static tooling tests must prove:
+  - the new connect entrypoint exists
+  - `manage_account.py` exposes `reset-password`
+  - the admin reset SQL file exists
+  - both wrappers require explicit `--new-password-env`
+  - no fixed fallback env names are documented for password change/reset
+- Static schema tests must prove:
+  - `auth.change_own_password(...)` exists
+  - `auth.reset_managed_account_password(...)` exists
+  - the admin reset helper uses `auth.can_manage_account(...)`
+
+### 7. Wrong vs Correct
+#### Wrong
+```bash
+python3 skills/agent-kb-postgres-connect/scripts/change_password.py --new-password hunter2
+```
+
+#### Correct
+```bash
+python3 skills/agent-kb-postgres-connect/scripts/change_password.py --new-password-env AGENT_KB_NEW_PASSWORD
+```
+
+---
+
 ## Query Patterns
 
 - Put reusable authorization logic in `SECURITY DEFINER` helper functions under `auth` or `app`, matching schema ownership.

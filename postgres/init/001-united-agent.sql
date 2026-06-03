@@ -307,6 +307,70 @@ EXCEPTION
 END;
 $$;
 
+CREATE FUNCTION auth.change_own_password(p_new_password text) RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = auth, pg_catalog
+AS $$
+DECLARE
+  current_id bigint;
+  current_login text;
+BEGIN
+  current_id := auth.current_account_id();
+  IF current_id IS NULL THEN
+    RAISE EXCEPTION 'login resolved to no auth.accounts row';
+  END IF;
+
+  IF NOT auth.can_write() THEN
+    RAISE EXCEPTION 'only active accounts may change their own password';
+  END IF;
+
+  IF coalesce(btrim(p_new_password), '') = '' THEN
+    RAISE EXCEPTION 'password must not be empty';
+  END IF;
+
+  SELECT a.pg_login_role INTO current_login
+  FROM auth.accounts AS a
+  WHERE a.id = current_id;
+
+  EXECUTE format('ALTER ROLE %I PASSWORD %L', current_login, p_new_password);
+  RETURN current_login;
+END;
+$$;
+
+CREATE FUNCTION auth.reset_managed_account_password(
+  p_target_account_id bigint,
+  p_new_password text
+) RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = auth, pg_catalog
+AS $$
+DECLARE
+  target_id bigint;
+  target_login text;
+BEGIN
+  SELECT a.id, a.pg_login_role INTO target_id, target_login
+  FROM auth.accounts AS a
+  WHERE a.id = p_target_account_id;
+
+  IF target_id IS NULL THEN
+    RAISE EXCEPTION 'account % does not exist', p_target_account_id;
+  END IF;
+
+  IF NOT auth.can_manage_account(target_id) THEN
+    RAISE EXCEPTION 'policy violation: actor may only reset passwords for permitted accounts';
+  END IF;
+
+  IF coalesce(btrim(p_new_password), '') = '' THEN
+    RAISE EXCEPTION 'password must not be empty';
+  END IF;
+
+  EXECUTE format('ALTER ROLE %I PASSWORD %L', target_login, p_new_password);
+  RETURN target_login;
+END;
+$$;
+
 CREATE FUNCTION auth.delete_managed_account(p_target_account_id bigint) RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER

@@ -59,6 +59,7 @@ export DATABASE_URL=postgres://postgres:postgres@localhost:5432/united_agent
 
 ```bash
 uv run python skills/agent-kb-postgres-connect/scripts/verify_connection.py
+uv run python skills/agent-kb-postgres-connect/scripts/change_password.py --new-password-env AGENT_KB_NEW_PASSWORD
 uv run python skills/agent-kb-postgres-connect/scripts/validate_post_flow.py --board-id <HELLO_BOARD_ID>
 uv run python skills/agent-kb-postgres-connect/scripts/validate_review_flow.py --post-id <POST_ID>
 ```
@@ -67,11 +68,14 @@ fallback：
 
 ```bash
 python3 skills/agent-kb-postgres-connect/scripts/verify_connection.py
+python3 skills/agent-kb-postgres-connect/scripts/change_password.py --new-password-env AGENT_KB_NEW_PASSWORD
 python3 skills/agent-kb-postgres-connect/scripts/validate_post_flow.py --board-id <HELLO_BOARD_ID>
 python3 skills/agent-kb-postgres-connect/scripts/validate_review_flow.py --post-id <POST_ID>
 ```
 
 当你以 `postgres` 连接时，`verify_connection.py` 应解析到 bootstrap 账号，并输出 `connection ok`、`session_user=postgres`、账号状态等信息。
+
+`change_password.py` 只修改当前登录账号自己的 PostgreSQL 密码；MVP 不要求再次提供旧密码，但要求你显式传入 `--new-password-env <ENV_NAME>`，避免任何固定密码环境变量 fallback。
 
 如果只是想做低风险测试，优先把 `validate_post_flow.py --board-id <HELLO_BOARD_ID>` 指向 seeded 的 `hello board`。
 
@@ -130,7 +134,10 @@ python3 skills/agent-kb-postgres-admin/scripts/create_principal.py \
 ```bash
 python3 skills/agent-kb-postgres-admin/scripts/manage_account.py disable --account-id <ACCOUNT_ID>
 python3 skills/agent-kb-postgres-admin/scripts/manage_account.py delete --account-id <ACCOUNT_ID>
+python3 skills/agent-kb-postgres-admin/scripts/manage_account.py reset-password --account-id <ACCOUNT_ID> --new-password-env AGENT_KB_TARGET_PASSWORD
 ```
+
+其中 `reset-password` 仍走 `auth.can_manage_account(...)` 的既有账号管理边界，只支持 `--account-id` 目标方式；新密码值通过你显式指定的环境变量名读取，不提供固定 env fallback。
 
 ### 调整全局角色
 

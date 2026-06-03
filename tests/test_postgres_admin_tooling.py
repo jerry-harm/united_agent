@@ -60,6 +60,7 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn('uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/create_principal.py', content)
         self.assertIn('uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py assign', content)
         self.assertIn('uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_account.py disable', content)
+        self.assertIn('uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_account.py reset-password --account-id 2 --new-password-env AGENT_KB_TARGET_PASSWORD', content)
         self.assertIn('uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_global_role.py grant', content)
         self.assertIn("skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql", content)
         self.assertIn("run `connect` first", content)
@@ -70,9 +71,10 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("do not edit shipped skill files to store secrets", content)
         self.assertIn("typically as `DATABASE_URL`", content)
         self.assertIn("Admin connection contract: shipped admin helpers require `DATABASE_URL`", content)
-        self.assertIn("prefer one-off account passwords through `--new-password`", content)
+        self.assertIn("prefer explicit env-variable-name flags such as `--new-password-env`", content)
         self.assertIn("AGENT_KB_NEW_PRINCIPAL_PASSWORD", content)
         self.assertIn("The database connection itself still comes from `DATABASE_URL`", content)
+        self.assertIn("No fixed password env fallback exists for reset-password", content)
         self.assertIn("delete reassigns posts and review/comment rows to the shared tombstone account", content)
         self.assertIn("compatibility:", content)
         self.assertIn("psycopg", content)
@@ -98,6 +100,7 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("`create_principal.py` **不能**创建 `super_admin`", content)
         self.assertIn("bootstrap identity 与后续普通运维账号是两件事", content)
         self.assertIn("优先在运行时通过 `--new-password` 传入", content)
+        self.assertIn("--new-password-env", content)
         self.assertIn("helper 也兼容一个历史密码环境变量", content)
         self.assertIn("先运行 connect skill", content)
         self.assertIn("普通用户连接与身份验证", content)
@@ -159,6 +162,7 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_list.sql")
         self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_account_disable.sql")
         self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_account_delete.sql")
+        self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_account_reset_password.sql")
         self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_global_role_grant.sql")
         self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_global_role_revoke.sql")
         self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_global_role_list.sql")
@@ -236,6 +240,9 @@ class PostgresAdminToolingTest(unittest.TestCase):
 
         self.assertIn('sql_file("scripts/sql/manage_account_disable.sql")', content)
         self.assertIn('sql_file("scripts/sql/manage_account_delete.sql")', content)
+        self.assertIn('sql_file("scripts/sql/manage_account_reset_password.sql")', content)
+        self.assertIn("--new-password-env", content)
+        self.assertIn("load_secret_from_env_name", content)
         self.assertIn("run_sql_file", content)
 
     def test_manage_global_role_python_script_uses_sql_files(self) -> None:
@@ -266,6 +273,7 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn('sql_file("scripts/sql/manage_board_moderator_list.sql")', manage_board_moderator)
         self.assertIn('sql_file("scripts/sql/manage_account_disable.sql")', manage_account)
         self.assertIn('sql_file("scripts/sql/manage_account_delete.sql")', manage_account)
+        self.assertIn('sql_file("scripts/sql/manage_account_reset_password.sql")', manage_account)
         self.assertIn('sql_file("scripts/sql/manage_global_role_grant.sql")', manage_global_role)
         self.assertIn('sql_file("scripts/sql/manage_global_role_revoke.sql")', manage_global_role)
         self.assertIn('sql_file("scripts/sql/manage_global_role_list.sql")', manage_global_role)
@@ -295,6 +303,7 @@ class PostgresAdminToolingTest(unittest.TestCase):
     def test_manage_account_sql_supports_disable_and_delete_with_tombstone_reassignment(self) -> None:
         disable_sql = self.read_text("skills/agent-kb-postgres-admin/scripts/sql/manage_account_disable.sql")
         delete_sql = self.read_text("skills/agent-kb-postgres-admin/scripts/sql/manage_account_delete.sql")
+        reset_sql = self.read_text("skills/agent-kb-postgres-admin/scripts/sql/manage_account_reset_password.sql")
         schema_sql = self.read_text("postgres/init/001-united-agent.sql")
 
         self.assertIn("auth.can_manage_account(target_id)", disable_sql)
@@ -310,6 +319,10 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("DELETE FROM auth.accounts", schema_sql)
         self.assertIn("deleted account tombstone", schema_sql)
         self.assertIn("deleted_account_tombstone", schema_sql)
+        self.assertIn("auth.reset_managed_account_password", reset_sql)
+        self.assertIn("auth.reset_managed_account_password", schema_sql)
+        self.assertIn("auth.can_manage_account(target_id)", schema_sql)
+        self.assertIn("ALTER ROLE %I PASSWORD %L", schema_sql)
 
     def test_manage_global_role_sql_supports_grant_revoke_and_list(self) -> None:
         grant_sql = self.read_text("skills/agent-kb-postgres-admin/scripts/sql/manage_global_role_grant.sql")
