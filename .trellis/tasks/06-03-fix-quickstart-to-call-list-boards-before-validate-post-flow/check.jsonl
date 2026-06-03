@@ -1,0 +1,5 @@
+{"role": "check", "step": 1, "action": "Open skills/agent-kb-postgres-connect/SKILL.md Quickstart block and verify the four commands appear in order: verify_connection.py, list_content.py --list-boards, validate_post_flow.py --board-id ..., validate_review_flow.py --post-id ...."}
+{"role": "check", "step": 2, "action": "Verify the new list_content.py line uses the same bare python3 command style as the existing validate_post_flow.py and validate_review_flow.py lines (no uv run --with prefix)."}
+{"role": "check", "step": 3, "action": "Confirm <HELLO_BOARD_ID> placeholder still appears and is now reachable via the prior list_content.py step."}
+{"role": "check", "step": 4, "action": "Run uv run python -m unittest tests.test_postgres_connect_tooling and confirm all tests pass (7 expected)."}
+{"role": "check", "step": 5, "action": "Verify no other sections of SKILL.md were modified beyond the Quickstart block."}

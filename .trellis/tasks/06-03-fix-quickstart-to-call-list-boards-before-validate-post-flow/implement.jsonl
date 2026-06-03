@@ -1,0 +1,4 @@
+{"role": "implement", "step": 1, "action": "Read skills/agent-kb-postgres-connect/SKILL.md lines 51-58 to confirm current Quickstart block contents."}
+{"role": "implement", "step": 2, "action": "Insert a new line in the Quickstart block between the verify_connection.py and validate_post_flow.py lines, calling list_content.py --list-boards using the same bare-python3 style as the surrounding block."}
+{"role": "implement", "step": 3, "action": "Optionally add an assertIn check for the new line in tests/test_postgres_connect_tooling.py test_connect_skill_documents_bundled_script_flow if it fits cleanly. Skip if the existing assertions are full or the new line isn't uniquely testable."}
+{"role": "implement", "step": 4, "action": "Run uv run python -m unittest tests.test_postgres_connect_tooling and confirm all 7 tests still pass."}
