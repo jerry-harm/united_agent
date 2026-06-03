@@ -877,3 +877,36 @@ Rewrote When to Interact With the Knowledge Base section with 11 complete trigge
 ### Next Steps
 
 - None - task complete
+
+
+## Session 27: Compress connect & admin SKILL.md — remove inline SQL, simplify triggers, all-uv
+
+**Date**: 2026-06-03
+**Task**: Compress connect & admin SKILL.md — remove inline SQL, simplify triggers, all-uv
+**Branch**: `main`
+
+### Summary
+
+Compress both SKILLs: connect 391→191 lines (-51%), admin 193→175 lines (-9%). Removed all inline SQL, replaced with simple trigger lists + reference to scripts/sql/. Updated all commands to uv. Synced tests. 36/36 tests pass.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c46e5b3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
