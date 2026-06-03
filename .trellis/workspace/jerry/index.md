@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 13
+- **Total Sessions**: 14
 - **Last Active**: 2026-06-03
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~445 | Active |
+| `journal-1.md` | ~480 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 14 | 2026-06-03 | Improve connect skill | `66126ac`, `76aaa35`, `11db5d7` | `main` |
 | 13 | 2026-06-03 | Bundle skill admin scripts | `516bb78`, `4adaf70` | `main` |
 | 12 | 2026-06-03 | Document design philosophy | `f4b81d6`, `254c28e` | `main` |
 | 11 | 2026-06-03 | Annotate init bootstrap SQL | `ee40167` | `main` |

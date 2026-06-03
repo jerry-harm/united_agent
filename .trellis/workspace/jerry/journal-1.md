@@ -443,3 +443,38 @@ Bundled the postgres admin helper scripts into the shipped skill, updated docs a
 ### Next Steps
 
 - None - task complete
+
+
+## Session 14: Improve connect skill
+
+**Date**: 2026-06-03
+**Task**: Improve connect skill
+**Branch**: `main`
+
+### Summary
+
+Bundled connect verification tooling into shipped skills, removed duplicated root operator scripts, added root uv dependency manifest, and updated specs/tests/docs for the skill-bundled PostgreSQL workflow.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `66126ac` | (see git log) |
+| `76aaa35` | (see git log) |
+| `11db5d7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
