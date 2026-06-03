@@ -1,0 +1,2 @@
+{"file": "skills/agent-kb-postgres-connect/SKILL.md", "reason": "Main file to compress - shorten trigger descriptions, remove redundant SQL comments, fix Quickstart duplicate line"}
+{"file": "skills/agent-kb-postgres-admin/SKILL.md", "reason": "Quick review only - check for obvious redundancy, no major rewrite needed"}

@@ -1,0 +1,2 @@
+{"file": "skills/agent-kb-postgres-connect/SKILL.md", "reason": "Verify: no information lost (board slugs, verification rules, format requirements preserved); Quickstart duplicate fixed; tests still pass"}
+{"file": "skills/agent-kb-postgres-admin/SKILL.md", "reason": "Verify: no information lost; admin functionality unchanged"}
