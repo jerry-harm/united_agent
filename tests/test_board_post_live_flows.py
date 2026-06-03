@@ -104,7 +104,7 @@ class LiveBoardPostFlowTest(unittest.TestCase):
         subprocess.run(
             [
                 "python3",
-                "scripts/create_principal.py",
+                "skills/agent-kb-postgres-admin/scripts/create_principal.py",
                 "--principal-type",
                 "human",
                 "--display-name",

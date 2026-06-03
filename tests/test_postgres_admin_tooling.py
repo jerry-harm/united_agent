@@ -24,8 +24,8 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("They do not trust a user-supplied `--actor-role` flag", content)
         self.assertIn("auth.accounts", content)
         self.assertIn("auth.principal_global_roles", content)
-        self.assertIn("scripts/create_principal.py", content)
-        self.assertIn("scripts/manage_board_moderator.py", content)
+        self.assertIn("python3 scripts/create_principal.py", content)
+        self.assertIn("python3 scripts/manage_board_moderator.py assign", content)
         self.assertIn("scripts/sql/create_principal.sql", content)
         self.assertIn("compatibility:", content)
         self.assertIn("psycopg", content)
@@ -39,9 +39,9 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("部署只需要 PostgreSQL 数据库", content)
         self.assertIn("数据库本身就是系统的交付物和部署单元", content)
         self.assertIn("skills/agent-kb-postgres-admin/SKILL.md", content)
-        self.assertIn("scripts/create_principal.py", content)
-        self.assertIn("scripts/manage_board_moderator.py", content)
-        self.assertIn("scripts/sql/create_principal.sql", content)
+        self.assertIn("skills/agent-kb-postgres-admin/scripts/create_principal.py", content)
+        self.assertIn("skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py", content)
+        self.assertIn("skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql", content)
         self.assertIn("auth.accounts", content)
         self.assertIn("auth.principal_global_roles", content)
         self.assertIn("auth.board_moderators", content)
@@ -78,6 +78,13 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assert_exists("scripts/sql/manage_board_moderator_assign.sql")
         self.assert_exists("scripts/sql/manage_board_moderator_revoke.sql")
         self.assert_exists("scripts/sql/manage_board_moderator_list.sql")
+        self.assert_exists("skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py")
+        self.assert_exists("skills/agent-kb-postgres-admin/scripts/create_principal.py")
+        self.assert_exists("skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py")
+        self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql")
+        self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_assign.sql")
+        self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_revoke.sql")
+        self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_list.sql")
 
     def test_common_python_helper_uses_env_defaults(self) -> None:
         content = self.read_text("scripts/_postgres_admin_common.py")
@@ -131,6 +138,15 @@ class PostgresAdminToolingTest(unittest.TestCase):
 
         self.assertIn("--account-id 2", content)
         self.assertIn("legacy compatibility alias", content)
+
+    def test_skill_local_python_scripts_use_skill_local_sql_files(self) -> None:
+        create_principal = self.read_text("skills/agent-kb-postgres-admin/scripts/create_principal.py")
+        manage_board_moderator = self.read_text("skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py")
+
+        self.assertIn('sql_file("scripts/sql/create_principal.sql")', create_principal)
+        self.assertIn('sql_file("scripts/sql/manage_board_moderator_assign.sql")', manage_board_moderator)
+        self.assertIn('sql_file("scripts/sql/manage_board_moderator_revoke.sql")', manage_board_moderator)
+        self.assertIn('sql_file("scripts/sql/manage_board_moderator_list.sql")', manage_board_moderator)
 
     def test_board_moderator_sql_limits_actions_to_admin_levels(self) -> None:
         content = self.read_text("scripts/sql/manage_board_moderator_assign.sql")

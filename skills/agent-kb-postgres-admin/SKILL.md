@@ -75,7 +75,7 @@ python3 scripts/create_principal.py \
   --login-role example_admin
 ```
 
-Pass the new account password with `--new-password` or `AGENT_KB_NEW_PRINCIPAL_PASSWORD`. The Python entrypoint reads `scripts/sql/create_principal.sql` and executes it through `psycopg`.
+Pass the new account password with `--new-password` or `AGENT_KB_NEW_PRINCIPAL_PASSWORD`. The Python entrypoint reads `scripts/sql/create_principal.sql` from this skill directory and executes it through `psycopg`.
 
 The SQL path targets the dual-schema model:
 
@@ -108,7 +108,9 @@ Inspect:
 python3 scripts/manage_board_moderator.py list
 ```
 
-The wrapper dispatches to `scripts/sql/manage_board_moderator_assign.sql`, `scripts/sql/manage_board_moderator_revoke.sql`, and `scripts/sql/manage_board_moderator_list.sql`. These SQL files are executed through `psycopg`, enforce admin-level access from the live session, and keep board-moderator assignment scoped to existing `normal_user` accounts under `auth.board_moderators`.
+The wrapper dispatches to `scripts/sql/manage_board_moderator_assign.sql`, `scripts/sql/manage_board_moderator_revoke.sql`, and `scripts/sql/manage_board_moderator_list.sql` from this skill directory. These SQL files are executed through `psycopg`, enforce admin-level access from the live session, and keep board-moderator assignment scoped to existing `normal_user` accounts under `auth.board_moderators`.
+
+The skill-bundled scripts are the default entrypoint for distributed usage. Repo-root `scripts/` may still exist for repository-local maintenance, but this skill no longer depends on them.
 
 `--principal-id` remains accepted only as a legacy compatibility alias; prefer `--account-id` in all current docs and usage.
 

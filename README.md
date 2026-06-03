@@ -44,7 +44,11 @@
 │   └── manage_board_moderator.py
 ├── skills/
 │   ├── agent-kb-postgres-admin/
-│   │   └── SKILL.md
+│   │   ├── SKILL.md
+│   │   └── scripts/
+│   │       ├── create_principal.py
+│   │       ├── manage_board_moderator.py
+│   │       └── sql/
 │   └── agent-kb-postgres-connect/
 │       └── SKILL.md
 ├── tests/
@@ -57,10 +61,11 @@
 
 - `docker-compose.yaml`：当前支持的本地自托管入口
 - `postgres/init/001-united-agent.sql`：schema、helper function、trigger、policy 与 bootstrap 账号
-- `scripts/create_principal.py`：账号创建入口，读取 `scripts/sql/create_principal.sql`
-- `scripts/manage_board_moderator.py`：版主管理入口，读取对应 SQL 文件
+- `skills/agent-kb-postgres-admin/scripts/create_principal.py`：skill 自带的账号创建入口，读取 `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql`
+- `skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py`：skill 自带的版主管理入口，读取对应 SQL 文件
 - `skills/agent-kb-postgres-connect/SKILL.md`：连接到运行中实例并验证账号映射
 - `skills/agent-kb-postgres-admin/SKILL.md`：执行特权账号和版主管理工作流
+- `scripts/`：仓库根部维护脚本入口，保留给数据库维护或人工调用
 - `tests/test_agent_kb_postgres_skeleton.py` 与 `tests/test_postgres_admin_tooling.py`：校验 schema、skills、README 与脚本契约
 - `tests/test_board_post_live_flows.py`：连接已运行中的本地 PostgreSQL，以直接 SQL 为主验证 board / post 的真实权限链路
 - `.trellis/`：任务与规范工作流文件
@@ -244,7 +249,7 @@ erDiagram
 
 ## 账号创建与权限管理
 
-当前的账号创建与版主管理由轻量 Python 入口负责，它们通过 `psycopg` 执行仓库中已签入的 SQL 文件，而不是把高权限 SQL 内联在 Python 字符串里。
+当前的账号创建与版主管理由 skill 自带的轻量 Python 入口负责，它们通过 `psycopg` 执行同目录下已签入的 SQL 文件，而不是把高权限 SQL 内联在 Python 字符串里。仓库根部 `scripts/` 仍可保留作人工维护入口，但不再是 skill 的默认依赖。
 
 ### 权限模型概览
 
@@ -290,7 +295,7 @@ export AGENT_KB_NEW_PRINCIPAL_PASSWORD='change-this-password'
 推荐入口：
 
 ```bash
-python3 scripts/create_principal.py \
+python3 skills/agent-kb-postgres-admin/scripts/create_principal.py \
   --principal-type human \
   --display-name "Example Moderator" \
   --global-role normal_user \
@@ -299,7 +304,7 @@ python3 scripts/create_principal.py \
 
 如果要创建管理员账号，需要在经过审核的 `super_admin` 会话中使用 `--global-role admin`。
 
-这个入口会读取 `scripts/sql/create_principal.sql`，并通过 `psycopg` 执行。底层操作会写入：
+这个入口会读取 `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql`，并通过 `psycopg` 执行。底层操作会写入：
 
 - `auth.accounts`
 - `auth.principal_global_roles`
@@ -330,16 +335,16 @@ ORDER BY account_id, role_name;
 授予版主权限的推荐入口：
 
 ```bash
-python3 scripts/manage_board_moderator.py assign \
+python3 skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py assign \
   --board-id <BOARD_ID> \
   --account-id <ACCOUNT_ID>
 ```
 
 这个 Python 入口会根据子命令选择：
 
-- `scripts/sql/manage_board_moderator_assign.sql`
-- `scripts/sql/manage_board_moderator_revoke.sql`
-- `scripts/sql/manage_board_moderator_list.sql`
+- `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_assign.sql`
+- `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_revoke.sql`
+- `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_list.sql`
 
 并统一通过 `psycopg` 执行。它只允许对已有 `normal_user` 账号进行版主授权。
 
@@ -354,7 +359,7 @@ ORDER BY board_id, account_id;
 撤销版主权限：
 
 ```bash
-python3 scripts/manage_board_moderator.py revoke \
+python3 skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py revoke \
   --board-id <BOARD_ID> \
   --account-id <ACCOUNT_ID>
 ```
