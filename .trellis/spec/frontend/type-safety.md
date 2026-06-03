@@ -10,9 +10,9 @@ No frontend TypeScript code exists yet, so there is no frontend type-safety conv
 
 The only active typed code in the repo today is Python with basic annotations, for example:
 
-- `scripts/_postgres_admin_common.py`
-- `scripts/create_principal.py`
-- `scripts/manage_board_moderator.py`
+- `skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py`
+- `skills/agent-kb-postgres-admin/scripts/create_principal.py`
+- `skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py`
 
 This file should stay explicit about that absence instead of guessing a future TypeScript stack.
 

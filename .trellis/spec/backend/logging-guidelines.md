@@ -24,7 +24,7 @@ Prefer documenting this minimal reality over inventing `logger.py`, log schemas,
 There is no formal log-level API today. Use the following interpretation when touching current scripts:
 
 - **Normal operator output**: rows printed from successful SQL execution.
-  - Example: `scripts/_postgres_admin_common.py` prints returned rows from `cursor.fetchall()`.
+  - Example: `skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py` prints returned rows from `cursor.fetchall()`.
 - **Validation failure**: `SystemExit` with a concise actionable message.
 - **Database failure**: let the raised SQL exception reach the operator.
 
@@ -49,8 +49,8 @@ Do not introduce ad hoc JSON logs or custom log wrappers in one script only.
 
 Current safe output examples:
 
-- listing board moderators from `scripts/sql/manage_board_moderator_list.sql`
-- returning newly created account rows from `scripts/sql/create_principal.sql`
+- listing board moderators from `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_list.sql`
+- returning newly created account rows from `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql`
 - explicit operator guidance such as missing env var names
 
 If you need to add observability before a server exists, prefer small operator-facing context such as:

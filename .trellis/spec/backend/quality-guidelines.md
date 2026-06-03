@@ -31,8 +31,9 @@ There is no dedicated lint config or type-checker config in the repo yet. Curren
 ## Required Patterns
 
 - Keep privileged business rules in SQL and execute them via checked-in files.
-- Reuse `scripts/_postgres_admin_common.py` for env loading, SQL rendering, and transaction execution instead of re-implementing connection code.
-- If a shipped skill documents executable helper scripts, bundle those helpers under the skill directory and keep their behavior aligned with the repo-root maintenance entrypoints.
+- If the repo uses a root `pyproject.toml` for uv, keep it dependency-only for shipped scripts/tests; do not imply this repo is a packaged Python application unless that becomes true.
+- Reuse the shipped skill-local common helper (for example `skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py`) for env loading, SQL rendering, and transaction execution instead of re-implementing connection code.
+- If a shipped skill documents executable helper scripts, bundle those helpers under the skill directory and keep docs/tests aligned with that shipped entrypoint.
 - Use placeholder rendering via `sql.Literal(...).as_string(connection)` rather than manual string concatenation.
 - Keep Python entrypoints thin: parse args, validate obvious inputs, delegate to SQL.
 - Add or update regression tests whenever changing:
@@ -49,13 +50,14 @@ There is no dedicated lint config or type-checker config in the repo yet. Curren
 For current backend changes, run at least:
 
 ```bash
-python3 -m py_compile scripts/_postgres_admin_common.py scripts/create_principal.py scripts/manage_board_moderator.py skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py skills/agent-kb-postgres-admin/scripts/create_principal.py skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py
+python3 -m py_compile skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py skills/agent-kb-postgres-admin/scripts/create_principal.py skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py skills/agent-kb-postgres-connect/scripts/_postgres_connect_common.py skills/agent-kb-postgres-connect/scripts/verify_connection.py
 python3 -m unittest discover -s tests -v
 ```
 
 Expected testing style today:
 
 - static contract checks against SQL, README, and skill files
+- shipped skill-bundled entrypoints should be checked both statically and, when practical, through live PostgreSQL integration tests
 - no fake framework-specific test scaffolding
 - explicit assertions on important strings and file presence
 

@@ -25,10 +25,10 @@ Use `raise SystemExit("...")` for invalid CLI or environment input.
 
 Real examples:
 
-- `scripts/_postgres_admin_common.py` raises `SystemExit` when required DB env vars are missing.
-- `scripts/create_principal.py` raises `SystemExit("login role must match PostgreSQL role naming rules")` for invalid login names.
-- `scripts/create_principal.py` raises `SystemExit("provide --new-password or set AGENT_KB_NEW_PRINCIPAL_PASSWORD")` when no password is provided.
-- `scripts/manage_board_moderator.py` raises `SystemExit("--board-id and --account-id are required for assign/revoke")` for incomplete assign/revoke input.
+- `skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py` raises `SystemExit` when required DB env vars are missing.
+- `skills/agent-kb-postgres-admin/scripts/create_principal.py` raises `SystemExit("login role must match PostgreSQL role naming rules")` for invalid login names.
+- `skills/agent-kb-postgres-admin/scripts/create_principal.py` raises `SystemExit("provide --new-password or set AGENT_KB_NEW_PRINCIPAL_PASSWORD")` when no password is provided.
+- `skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py` raises `SystemExit("--board-id and --account-id are required for assign/revoke")` for incomplete assign/revoke input.
 
 ### SQL policy and integrity failures
 
@@ -37,8 +37,8 @@ Use `RAISE EXCEPTION` inside SQL helpers/functions for permission and domain vio
 Real examples:
 
 - `postgres/init/001-united-agent.sql` raises `only admin or super_admin may create accounts` in `auth.create_account_login(...)`.
-- `scripts/sql/create_principal.sql` raises `policy violation: admin may create only normal_user accounts`.
-- `scripts/sql/manage_board_moderator_assign.sql` raises `policy violation: board moderators must be existing normal_user accounts`.
+- `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql` raises `policy violation: admin may create only normal_user accounts`.
+- `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_assign.sql` raises `policy violation: board moderators must be existing normal_user accounts`.
 
 ---
 
@@ -48,7 +48,7 @@ Real examples:
 - Keep authorization and domain enforcement in the database, not in user-supplied flags.
 - Let `psycopg` exceptions propagate; do not wrap them in generic catch-all error text.
 - Use transaction boundaries when running checked-in SQL files:
-  - `scripts/_postgres_admin_common.py` sets `connection.autocommit = False`
+  - `skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py` sets `connection.autocommit = False`
   - commits only after successful execution
 - When a SQL function performs side effects before a later failure, clean up and re-raise.
   - `auth.create_account_login(...)` drops the created PostgreSQL role in its `EXCEPTION` block before `RAISE`.

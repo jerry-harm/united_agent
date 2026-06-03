@@ -80,19 +80,13 @@ SELECT id FROM auth.accounts WHERE pg_login_role = session_user;
 ## Scenario: SQL-file-backed admin helpers
 
 ### 1. Scope / Trigger
-- Trigger: privileged account creation and board-moderator management are implemented as shipped repo helpers, and those helpers must stay cross-platform while enforcing policy from the live PostgreSQL session.
+- Trigger: privileged account creation and board-moderator management are implemented as shipped skill-bundled helpers, and those helpers must stay cross-platform while enforcing policy from the live PostgreSQL session.
 
 ### 2. Signatures
 - Python entrypoints:
-  - `python3 scripts/create_principal.py --principal-type <human|agent> --display-name <text> --global-role <normal_user|admin> --login-role <pg_role> [--new-password <password>]`
-  - `python3 scripts/manage_board_moderator.py <assign|revoke|list> [--board-id <id> --account-id <id>]`
   - `python3 skills/agent-kb-postgres-admin/scripts/create_principal.py --principal-type <human|agent> --display-name <text> --global-role <normal_user|admin> --login-role <pg_role> [--new-password <password>]`
   - `python3 skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py <assign|revoke|list> [--board-id <id> --account-id <id>]`
 - SQL files executed by those entrypoints:
-  - `scripts/sql/create_principal.sql`
-  - `scripts/sql/manage_board_moderator_assign.sql`
-  - `scripts/sql/manage_board_moderator_revoke.sql`
-  - `scripts/sql/manage_board_moderator_list.sql`
   - `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql`
   - `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_assign.sql`
   - `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_revoke.sql`
@@ -111,7 +105,7 @@ SELECT id FROM auth.accounts WHERE pg_login_role = session_user;
   - Python environment with `psycopg` installed (recommended install command: `pip install "psycopg[binary]"`)
 - Execution contract:
   - Python wrappers must read the checked-in SQL file and execute it through `psycopg`.
-  - Skill-distributed entrypoints must resolve their SQL from the same skill directory so installing the skill does not depend on repo-root `scripts/`.
+  - Shipped entrypoints must resolve their SQL from the same skill directory so installing the skill does not depend on repo-root maintenance files.
   - SQL files should keep placeholder tokens in the `{{name}}` form so the Python wrapper can render safe SQL literals before execution.
   - Helper SQL must derive actor privilege from `auth` helper functions and grant tables inside the database.
   - Helpers must not accept or trust a user-supplied actor-role override.
@@ -127,16 +121,15 @@ SELECT id FROM auth.accounts WHERE pg_login_role = session_user;
 - unauthorized `UPDATE` against an RLS-protected row may affect zero visible rows instead of raising a PostgreSQL error, depending on whether the denial happens through row filtering in `USING` versus a failing `WITH CHECK`
 
 ### 5. Good/Base/Bad Cases
-- Good: `python3 scripts/create_principal.py --principal-type human --display-name "Example User" --global-role normal_user --login-role example_user` from an `admin` session with `AGENT_KB_NEW_PRINCIPAL_PASSWORD` set.
-- Good: `python3 scripts/create_principal.py ...` and `python3 skills/agent-kb-postgres-admin/scripts/create_principal.py ...` remain behaviorally equivalent, with the skill path used for distributed skill workflows.
-- Base: `python3 scripts/manage_board_moderator.py list` from an `admin` session to inspect current assignments.
+- Good: `python3 skills/agent-kb-postgres-admin/scripts/create_principal.py --principal-type human --display-name "Example User" --global-role normal_user --login-role example_user` from an `admin` session with `AGENT_KB_NEW_PRINCIPAL_PASSWORD` set.
+- Good: shipped operator guidance points only at the skill-bundled Python and SQL files under `skills/agent-kb-postgres-admin/scripts/`.
+- Base: `python3 skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py list` from an `admin` session to inspect current assignments.
 - Bad: embedding privileged SQL directly inside Python strings and branching on a user-provided `--actor-role` flag.
 
 ### 6. Tests Required
 - Static tooling test must prove:
-  - the Python entrypoints exist
-  - the SQL files exist
-  - the skill-bundled entrypoints and SQL files exist when a skill documents them
+  - the shipped Python entrypoints exist
+  - the shipped SQL files exist
   - the shared runner uses env defaults for port/name
   - the shared runner imports `psycopg`, reads SQL files from disk, and executes them through a cursor
   - account creation SQL targets `auth.accounts` and `auth.principal_global_roles`
@@ -231,3 +224,73 @@ with psycopg.connect(...) as connection:
 **Fix**: Use an unambiguous parameter name such as `p_role_name` and compare `pgr.role_name = p_role_name`.
 
 **Prevention**: Keep a static regression test that asserts the helper signature and comparison text use distinct parameter names.
+
+---
+
+## Scenario: Ordinary-user connect verification helper
+
+### 1. Scope / Trigger
+- Trigger: the distributed `agent-kb-postgres-connect` skill now ships a reusable Python helper for ordinary-user connection and identity verification.
+
+### 2. Signatures
+- Python entrypoint:
+  - `uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/verify_connection.py`
+  - `python3 skills/agent-kb-postgres-connect/scripts/verify_connection.py` (fallback when `uv` is unavailable)
+- Skill-bundled files:
+  - `skills/agent-kb-postgres-connect/scripts/verify_connection.py`
+  - `skills/agent-kb-postgres-connect/scripts/_postgres_connect_common.py`
+
+### 3. Contracts
+- Required environment keys:
+  - `AGENT_KB_DB_HOST`
+  - `AGENT_KB_DB_USER`
+  - `AGENT_KB_DB_PASSWORD`
+- Optional environment keys:
+  - `AGENT_KB_DB_PORT` (default `5432`)
+  - `AGENT_KB_DB_NAME` (default `united_agent`)
+  - `AGENT_KB_EXPECTED_LOGIN_ROLE`
+  - `AGENT_KB_EXPECTED_DISPLAY_NAME`
+- Runtime dependency:
+  - Python environment with `psycopg` available; docs should prefer `uv run --with "psycopg[binary]" ...` while keeping a plain `python3` fallback path.
+- Execution contract:
+  - The helper connects with the provided login credentials.
+  - The helper must verify `current_user`, `session_user`, `auth.current_account_id()`, `auth.current_account_status()`, `display_name`, and `pg_login_role` from the mapped `auth.accounts` row.
+  - Identity resolution must remain based on `session_user`.
+  - The helper stays ordinary-user-only and must not create accounts, grant roles, or manage moderators.
+
+### 4. Validation & Error Matrix
+- no mapped `auth.accounts` row -> exit with `login resolved to no auth.accounts row`
+- inactive mapped account -> exit with `account <id> is not active: <status>`
+- expected login role mismatch -> exit with `expected pg_login_role=...`
+- expected display name mismatch -> exit with `expected display_name=...`
+- connection/auth failure before query -> let the connection error surface so the operator fixes host / port / db / login / password first
+
+### 5. Good/Base/Bad Cases
+- Good: reconnect as a mapped `normal_user` login and print `connection ok` plus resolved identity fields.
+- Base: run the helper as the local bootstrap `postgres` account and confirm the bootstrap `auth.accounts` row resolves.
+- Bad: treat a PostgreSQL login without an `auth.accounts` mapping as success.
+- Bad: let the helper drift into privileged bootstrap or role-management behavior.
+
+### 6. Tests Required
+- Static tooling test must prove:
+  - the bundled helper files exist
+  - the helper uses the skill-local common module
+  - the helper checks `session_user`, `auth.current_account_id()`, and `auth.current_account_status()`
+  - the skill and README prefer `uv` while preserving a `python3` fallback
+- Live integration coverage should prove:
+  - a mapped active login succeeds and prints resolved identity info
+  - an unmapped login fails clearly
+  - a disabled mapped account fails clearly
+
+### 7. Wrong vs Correct
+#### Wrong
+```bash
+python3 - <<'PY'
+# long inline verification flow copied out of the skill body
+PY
+```
+
+#### Correct
+```bash
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/verify_connection.py
+```
