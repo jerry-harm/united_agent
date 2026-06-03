@@ -478,3 +478,37 @@ Bundled connect verification tooling into shipped skills, removed duplicated roo
 ### Next Steps
 
 - None - task complete
+
+
+## Session 15: 补齐数据库权限 live 测试
+
+**Date**: 2026-06-03
+**Task**: 补齐数据库权限 live 测试
+**Branch**: `main`
+
+### Summary
+
+Added themed live PostgreSQL permission test suites, documented the new test entrypoints, and updated backend quality guidance for shared live-test helpers and permission-boundary coverage.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `438e43a` | (see git log) |
+| `0c18c4e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
