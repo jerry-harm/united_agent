@@ -375,3 +375,37 @@ Added review-friendly comments to the PostgreSQL init bootstrap SQL, covering ma
 ### Next Steps
 
 - None - task complete
+
+
+## Session 12: Document design philosophy
+
+**Date**: 2026-06-03
+**Task**: Document design philosophy
+**Branch**: `main`
+
+### Summary
+
+Added a standalone maintainer-facing design philosophy document covering the PostgreSQL-first system boundary, auth rationale, and user operation principles, then recorded the task planning artifacts.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f4b81d6` | (see git log) |
+| `254c28e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
