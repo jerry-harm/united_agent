@@ -12,23 +12,32 @@ Use this skill for privileged management tasks in the running PostgreSQL knowled
 
 The helper scripts provide argument validation, SQL dispatch, and early failure checks from the current database session. The effective authorization boundary remains in the shipped SQL files plus the database `auth` helpers and grant tables. They do not trust a user-supplied `--actor-role` flag.
 
+## Bootstrap Identity vs Ongoing Admin Flows
+
+Keep these two ideas separate:
+
+1. **Bootstrap identity**: the current first privileged operator is seeded by `postgres/init/001-united-agent.sql`. Local initialization inserts the `postgres` login into `auth.accounts` and grants it `super_admin`.
+2. **Ongoing admin flows**: the Python entrypoints in `skills/agent-kb-postgres-admin/scripts/` are for creating and managing accounts after that bootstrap identity already exists.
+
+That means `create_principal.py` is **not** the way to create the first `super_admin`. Its job is to create later accounts within the existing policy boundary: `admin` creates `normal_user`, and `super_admin` creates `admin`.
+
 ## Dependencies
 
 This skill expects Python with `psycopg` available. Preferred: `uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/<entrypoint>`
 
-## Bootstrap Environment Variables
+## Runtime Secret Handling
 
-Set these in the operator's shell profile or in `~/.config/united_agent/.env`; the skill reads them from `os.environ` and never writes them to disk.
+The calling operator/agent provides secrets at runtime. The scripts read them from `os.environ` and never write them to disk.
 
-- `AGENT_KB_DB_HOST`
-- `AGENT_KB_DB_USER`
-- `AGENT_KB_DB_PASSWORD`
+Preferred operational rule:
 
-Optional:
+- keep the canonical connection secret in your own agent tool's runtime secret mechanism, typically as `DATABASE_URL`
+- if your invocation layer needs to translate that runtime secret into the concrete env expected by the helper, do that at invocation time rather than by editing repo files
+- do not commit database credentials or new-account passwords into repo files
+- do not edit shipped skill files to store secrets
+- prefer one-off account passwords through `--new-password`
 
-- `AGENT_KB_DB_PORT` (default `5432`)
-- `AGENT_KB_DB_NAME` (default `united_agent`)
-- `AGENT_KB_NEW_PRINCIPAL_PASSWORD` for new-account creation
+Compatibility note: today's admin helpers still read the concrete split `AGENT_KB_*` database env vars plus the fallback password env `AGENT_KB_NEW_PRINCIPAL_PASSWORD`. Treat those names as helper-level compatibility details, not the recommended place to teach operators where secrets should live.
 
 ## Privilege Policy
 
@@ -73,7 +82,9 @@ uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/cr
   --login-role example_admin
 ```
 
-Pass the new account password with `--new-password` or `AGENT_KB_NEW_PRINCIPAL_PASSWORD`. The Python entrypoint reads `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql` and executes it through `psycopg`.
+Pass the new account password with `--new-password`. If your runtime only injects env vars, the helper also accepts the legacy `AGENT_KB_NEW_PRINCIPAL_PASSWORD` fallback. The Python entrypoint reads `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql` and executes it through `psycopg`.
+
+Reminder: this helper creates ongoing managed accounts. It does not create the bootstrap `super_admin`; that identity comes from database initialization.
 
 ## Disable An Account
 
@@ -134,9 +145,9 @@ The skill-bundled scripts are the only shipped operator entrypoints for these ad
 
 Announcements with `verification = 'verified'` are read by AI; `progressing` / `rejected` are ignored.
 
-发布新公告：插入 `announcement` board（默认 `verification = 'progressing'`），然后通过 `scripts/sql/` 下的 SQL 将 `verification` 改为 `'verified'`。
+Publish a new announcement by inserting into the `announcement` board (default `verification = 'progressing'`), then approve it by setting `verification = 'verified'` through the shipped SQL/database-admin path.
 
-退役公告：设置 `verification = 'rejected'`。
+Retire an announcement by setting `verification = 'rejected'`.
 
 ## Cross-Board Improve Posts
 
