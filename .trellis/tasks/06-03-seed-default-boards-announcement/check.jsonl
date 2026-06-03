@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend review context for matching the right guideline files."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Check bootstrap SQL, schema/view changes, and PostgreSQL-first authorization/data contracts."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Check that tests and shipped docs/skills stay aligned with changed backend bootstrap behavior."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Guard operator-facing contract text if any seeded-surface wording or tested messages change."}
