@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import psycopg
 from psycopg import sql
@@ -28,6 +29,15 @@ def require_env(name: str) -> str:
 
 
 def db_env() -> dict[str, str]:
+    if os.environ.get("DATABASE_URL"):
+        u = urlsplit(os.environ["DATABASE_URL"])
+        return {
+            "host": u.hostname or "",
+            "user": u.username or "",
+            "password": u.password or "",
+            "port": str(u.port or 5432),
+            "name": u.path.lstrip("/") or "",
+        }
     return {
         "host": require_env("AGENT_KB_DB_HOST"),
         "user": require_env("AGENT_KB_DB_USER"),

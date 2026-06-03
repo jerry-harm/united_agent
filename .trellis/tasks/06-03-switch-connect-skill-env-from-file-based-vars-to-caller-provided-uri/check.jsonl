@@ -1,0 +1,5 @@
+{"role": "check", "step": 1, "action": "Run uv run python -m unittest tests.test_postgres_connect_tooling tests.test_postgres_admin_tooling and confirm all tests pass."}
+{"role": "check", "step": 2, "action": "Read _postgres_connect_common.py and confirm DATABASE_URL is parsed with urllib.parse.urlsplit and takes precedence over individual vars."}
+{"role": "check", "step": 3, "action": "Grep SKILL.md to confirm: (a) no mention of shell profile or .env file, (b) DATABASE_URL is the primary env var, (c) calling agent/client provides it at runtime."}
+{"role": "check", "step": 4, "action": "Grep README.md to confirm For Normal Users and For Server Deployment sections use single DATABASE_URL export, not 5 separate exports."}
+{"role": "check", "step": 5, "action": "Confirm all existing script paths (verify_connection.py, validate_post_flow.py, etc.) still exist and are referenced correctly."}

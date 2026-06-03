@@ -33,16 +33,21 @@ pip install "psycopg[binary]"
 python3 skills/agent-kb-postgres-connect/scripts/<entrypoint>
 ```
 
-## Bootstrap Environment Variables
+## Connection Configuration
 
-Set these in the operator's shell profile or in `~/.config/united_agent/.env`; the skill reads them from `os.environ` and never writes them to disk.
+The calling agent/client provides the connection via `DATABASE_URL`. The skill never stores credentials to disk.
+
+Primary:
+
+```bash
+export DATABASE_URL=postgres://username:password@host:port/dbname
+```
+
+Fallback (individual vars, used when `DATABASE_URL` is not set):
 
 - `AGENT_KB_DB_HOST`
 - `AGENT_KB_DB_USER`
 - `AGENT_KB_DB_PASSWORD`
-
-Optional:
-
 - `AGENT_KB_DB_PORT` (default `5432`)
 - `AGENT_KB_DB_NAME` (default `united_agent`)
 - `AGENT_KB_EXPECTED_LOGIN_ROLE` if you want an explicit role-name check
@@ -51,6 +56,7 @@ Optional:
 Quickstart:
 
 ```bash
+export DATABASE_URL=postgres://postgres:postgres@localhost:5432/united_agent
 uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/verify_connection.py
 python3 skills/agent-kb-postgres-connect/scripts/verify_connection.py
 python3 skills/agent-kb-postgres-connect/scripts/list_content.py --list-boards

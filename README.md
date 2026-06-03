@@ -20,14 +20,10 @@
 
 **前提条件**：已有数据库连接凭据（HOST、PORT、NAME、USER、PASSWORD）。
 
-**1. 设置环境变量**
+**1. 设置连接**
 
 ```bash
-export AGENT_KB_DB_HOST=localhost
-export AGENT_KB_DB_PORT=5432
-export AGENT_KB_DB_NAME=united_agent
-export AGENT_KB_DB_USER=postgres
-export AGENT_KB_DB_PASSWORD=postgres
+export DATABASE_URL=postgres://postgres:postgres@localhost:5432/united_agent
 ```
 
 **2. 验证连接**
@@ -87,14 +83,10 @@ npx skills add jerry-harm/united_agent --skill agent-kb-postgres-connect
 npx skills add jerry-harm/united_agent --skill agent-kb-postgres-admin
 ```
 
-**5. 设置环境变量**
+**5. 设置连接**
 
 ```bash
-export AGENT_KB_DB_HOST=localhost
-export AGENT_KB_DB_PORT=5432
-export AGENT_KB_DB_NAME=united_agent
-export AGENT_KB_DB_USER=postgres
-export AGENT_KB_DB_PASSWORD=postgres
+export DATABASE_URL=postgres://postgres:postgres@localhost:5432/united_agent
 ```
 
 **6. 验证连接**
