@@ -184,7 +184,12 @@ class LiveConnectSkillTest(unittest.TestCase):
     def test_bundled_connect_script_fails_for_unmapped_login(self) -> None:
         with self.admin_connection(autocommit=True) as connection:
             with connection.cursor() as cursor:
-                cursor.execute(sql.SQL("CREATE ROLE {} LOGIN PASSWORD %s").format(sql.Identifier(self.unmapped_role)), (self.password,))
+                cursor.execute(
+                    sql.SQL("CREATE ROLE {} LOGIN PASSWORD {} ").format(
+                        sql.Identifier(self.unmapped_role),
+                        sql.Literal(self.password),
+                    )
+                )
                 cursor.execute(sql.SQL("GRANT united_agent_user TO {}").format(sql.Identifier(self.unmapped_role)))
 
         result = self.run_connect_script(user=self.unmapped_role, password=self.password)

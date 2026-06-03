@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 
-from _postgres_admin_common import open_connection, require_admin, run_sql_file, sql_file
+from _postgres_admin_common import run_sql_file, sql_file
 
 
 SQL_FILES = {
@@ -24,13 +24,6 @@ def main() -> int:
     args = parse_args()
     if args.action in {"grant", "revoke"} and not (args.account_id and args.role_name):
         raise SystemExit("--account-id and --role-name are required for grant/revoke")
-    if args.action == "grant" and args.role_name == "super_admin":
-        raise SystemExit("granting super_admin via the helper is not allowed; perform the change manually under direct super_admin review")
-
-    with open_connection() as connection:
-        connection.autocommit = False
-        require_admin(connection, need_super_admin=True)
-        connection.rollback()
 
     variables: dict[str, str] = {}
     if args.account_id:

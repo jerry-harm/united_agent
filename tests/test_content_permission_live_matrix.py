@@ -97,7 +97,7 @@ class LiveContentPermissionMatrixTest(LivePostgresTestCase):
                 cursor.execute("SELECT count(*) FROM app.post_tags WHERE post_id = %s AND tag_id = %s", (post_id, tag_id))
                 self.assertEqual(cursor.fetchone()[0], 1)
                 cursor.execute("SELECT count(*) FROM app.review_history WHERE review_entry_id = %s", (review_entry_id,))
-                self.assertEqual(cursor.fetchone()[0], 0)
+                self.assertEqual(cursor.fetchone()[0], 1)
 
         with self.connection_for(user=peer_role, password=peer_password) as connection:
             with connection.cursor() as cursor:
@@ -125,9 +125,25 @@ class LiveContentPermissionMatrixTest(LivePostgresTestCase):
                     ("peer update denied", review_entry_id),
                 )
                 self.assertEqual(cursor.rowcount, 0)
+                cursor.execute("DELETE FROM app.posts WHERE id = %s", (post_id,))
+                self.assertEqual(cursor.rowcount, 0)
                 cursor.execute("DELETE FROM app.review_entries WHERE id = %s", (review_entry_id,))
                 self.assertEqual(cursor.rowcount, 0)
                 connection.rollback()
+
+        with self.connection_for(user=author_role, password=author_password) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM app.post_tags WHERE post_id = %s AND tag_id = %s", (post_id, tag_id))
+                self.assertEqual(cursor.rowcount, 1)
+            connection.commit()
+
+        with self.connection_for(user=author_role, password=author_password) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "INSERT INTO app.post_tags (post_id, tag_id) VALUES (%s, %s)",
+                    (post_id, tag_id),
+                )
+            connection.commit()
 
         with self.connection_for(user=peer_role, password=peer_password) as connection:
             with connection.cursor() as cursor:
@@ -149,13 +165,57 @@ class LiveContentPermissionMatrixTest(LivePostgresTestCase):
         self.assertEqual(assign_result.returncode, 0, assign_result.stderr)
 
         moderator_tag_name = self.make_tag_name("moderator")
+        moderator_tag_id: int
         with self.connection_for(user=moderator_role, password=moderator_password) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
                     "INSERT INTO app.tags (name, created_by) VALUES (%s, auth.current_account_id()) RETURNING id",
                     (moderator_tag_name,),
                 )
-                self.assertIsInstance(cursor.fetchone()[0], int)
+                moderator_tag_id = cursor.fetchone()[0]
+                self.assertIsInstance(moderator_tag_id, int)
+                cursor.execute(
+                    "INSERT INTO app.post_tags (post_id, tag_id) VALUES (%s, %s)",
+                    (post_id, moderator_tag_id),
+                )
+                cursor.execute("DELETE FROM app.post_tags WHERE post_id = %s AND tag_id = %s", (post_id, moderator_tag_id))
+                self.assertEqual(cursor.rowcount, 1)
+                cursor.execute("DELETE FROM app.tags WHERE id = %s", (moderator_tag_id,))
+                self.assertEqual(cursor.rowcount, 1)
+            connection.commit()
+
+        admin_post_id = self.create_post(
+            user=author_role,
+            password=author_password,
+            board_id=board_id,
+            title="Admin Delete Post",
+            body="admin delete coverage",
+        )
+        admin_review_entry_id = self.create_review_entry(
+            user=author_role,
+            password=author_password,
+            post_id=admin_post_id,
+            conclusion="admin delete review",
+        )
+        admin_tag_id = self.create_tag(user="postgres", password="postgres", name=self.make_tag_name("admin-delete"))
+        with self.connection_for(user=author_role, password=author_password) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("UPDATE app.review_entries SET conclusion = %s WHERE id = %s", ("admin delete review updated", admin_review_entry_id))
+                cursor.execute("INSERT INTO app.post_tags (post_id, tag_id) VALUES (%s, %s)", (admin_post_id, admin_tag_id))
+            connection.commit()
+
+        with self.admin_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM app.post_tags WHERE post_id = %s AND tag_id = %s", (admin_post_id, admin_tag_id))
+                self.assertEqual(cursor.rowcount, 1)
+                cursor.execute("DELETE FROM app.review_history WHERE review_entry_id = %s", (admin_review_entry_id,))
+                self.assertEqual(cursor.rowcount, 1)
+                cursor.execute("DELETE FROM app.review_entries WHERE id = %s", (admin_review_entry_id,))
+                self.assertEqual(cursor.rowcount, 1)
+                cursor.execute("DELETE FROM app.posts WHERE id = %s", (admin_post_id,))
+                self.assertEqual(cursor.rowcount, 1)
+                cursor.execute("DELETE FROM app.tags WHERE id = %s", (admin_tag_id,))
+                self.assertEqual(cursor.rowcount, 1)
             connection.commit()
 
         with self.connection_for(user=peer_role, password=peer_password) as connection:

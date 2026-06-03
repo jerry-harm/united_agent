@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 
 from tests.live_postgres_helpers import ROOT, LivePostgresTestCase
@@ -44,6 +45,19 @@ class LiveModeratorPermissionsFlowTest(LivePostgresTestCase):
             title="Moderated Post",
             body="post awaiting moderation",
         )
+        review_entry_id = self.create_review_entry(
+            user=author_role,
+            password=author_password,
+            post_id=post_id,
+            conclusion="needs moderation",
+        )
+        with self.connection_for(user=author_role, password=author_password) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE app.review_entries SET conclusion = %s WHERE id = %s",
+                    ("edited before moderation", review_entry_id),
+                )
+            connection.commit()
 
         is_admin, is_super_admin, can_write, is_board_moderator, status = self.fetch_role_flags(
             user=moderator_role,
@@ -81,7 +95,7 @@ class LiveModeratorPermissionsFlowTest(LivePostgresTestCase):
             actor_password="postgres",
         )
         self.assertEqual(list_result.returncode, 0, list_result.stderr)
-        self.assertIn(f"{board_id} | {moderator_account_id}", list_result.stdout)
+        self.assertRegex(list_result.stdout, rf"\b{board_id}\b\s*\|\s*\b{moderator_account_id}\b")
 
         is_admin, is_super_admin, can_write, is_board_moderator, status = self.fetch_role_flags(
             user=moderator_role,
@@ -101,7 +115,35 @@ class LiveModeratorPermissionsFlowTest(LivePostgresTestCase):
                     (post_id,),
                 )
                 self.assertEqual(cursor.fetchone()[0], "verified")
+                cursor.execute(
+                    "SELECT count(*) FROM app.review_history WHERE review_entry_id = %s",
+                    (review_entry_id,),
+                )
+                self.assertEqual(cursor.fetchone()[0], 1)
+                cursor.execute(
+                    "DELETE FROM app.review_history WHERE review_entry_id = %s",
+                    (review_entry_id,),
+                )
+                self.assertEqual(cursor.rowcount, 1)
+                cursor.execute("INSERT INTO app.tags (name, created_by) VALUES (%s, auth.current_account_id()) RETURNING id", (self.make_tag_name("moderator-scope"),))
+                tag_id = cursor.fetchone()[0]
+                cursor.execute("INSERT INTO app.post_tags (post_id, tag_id) VALUES (%s, %s)", (post_id, tag_id))
+                cursor.execute("DELETE FROM app.post_tags WHERE post_id = %s AND tag_id = %s", (post_id, tag_id))
+                self.assertEqual(cursor.rowcount, 1)
+                cursor.execute("DELETE FROM app.tags WHERE id = %s", (tag_id,))
+                self.assertEqual(cursor.rowcount, 1)
+                cursor.execute("DELETE FROM app.review_entries WHERE id = %s", (review_entry_id,))
+                self.assertEqual(cursor.rowcount, 1)
+                cursor.execute("DELETE FROM app.posts WHERE id = %s", (post_id,))
+                self.assertEqual(cursor.rowcount, 1)
             connection.commit()
+
+        with self.admin_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT count(*) FROM app.review_entries WHERE id = %s", (review_entry_id,))
+                self.assertEqual(cursor.fetchone()[0], 0)
+                cursor.execute("SELECT count(*) FROM app.posts WHERE id = %s", (post_id,))
+                self.assertEqual(cursor.fetchone()[0], 0)
 
         revoke_result = self.run_manage_board_moderator(
             "revoke",
@@ -112,10 +154,13 @@ class LiveModeratorPermissionsFlowTest(LivePostgresTestCase):
         )
         self.assertEqual(revoke_result.returncode, 0, revoke_result.stderr)
 
-        with self.admin_connection() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute("UPDATE app.posts SET verification = 'progressing' WHERE id = %s", (post_id,))
-            connection.commit()
+        post_after_revoke_id = self.create_post(
+            user=author_role,
+            password=author_password,
+            board_id=board_id,
+            title="Post After Revoke",
+            body="post after revoke",
+        )
 
         list_after_revoke = self.run_manage_board_moderator(
             "list",
@@ -123,7 +168,7 @@ class LiveModeratorPermissionsFlowTest(LivePostgresTestCase):
             actor_password="postgres",
         )
         self.assertEqual(list_after_revoke.returncode, 0, list_after_revoke.stderr)
-        self.assertNotIn(f"{board_id} | {moderator_account_id}", list_after_revoke.stdout)
+        self.assertIsNone(re.search(rf"\b{board_id}\b\s*\|\s*\b{moderator_account_id}\b", list_after_revoke.stdout))
 
         is_admin, is_super_admin, can_write, is_board_moderator, status = self.fetch_role_flags(
             user=moderator_role,
@@ -138,7 +183,7 @@ class LiveModeratorPermissionsFlowTest(LivePostgresTestCase):
             with connection.cursor() as cursor:
                 cursor.execute(
                     "UPDATE app.posts SET verification = 'verified' WHERE id = %s RETURNING verification",
-                    (post_id,),
+                    (post_after_revoke_id,),
                 )
                 self.assertEqual(cursor.rowcount, 0)
                 self.assertIsNone(cursor.fetchone())

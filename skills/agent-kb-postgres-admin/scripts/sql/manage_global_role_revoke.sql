@@ -11,6 +11,10 @@ BEGIN
     RAISE EXCEPTION 'account % does not exist', {{account_id}};
   END IF;
 
+  IF {{role_name}}::auth.global_role = 'super_admin'::auth.global_role THEN
+    RAISE EXCEPTION 'policy violation: use direct database maintenance for super_admin role changes';
+  END IF;
+
   DELETE FROM auth.principal_global_roles
   WHERE account_id = {{account_id}}::bigint
     AND role_name = {{role_name}}::auth.global_role;

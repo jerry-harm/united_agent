@@ -36,13 +36,15 @@ Optional:
 
 ## Privilege Policy
 
-In plain terms: admin can create normal_user, super_admin can create admin, only super_admin changes global roles, only super_admin deletes accounts, and board moderator assignment is a lower-risk operation for `normal_user` accounts.
+In plain terms: admin can create normal_user, super_admin can create admin, only super_admin changes global roles, admin can manage normal_user accounts, super_admin can additionally manage admin accounts, and board moderator assignment is a lower-risk operation for `normal_user` accounts.
 
 - `admin` can create `normal_user`
 - `super_admin` can create `admin`
 - `super_admin` can change any global role
-- `super_admin` can delete an account
-- `admin` can disable an account
+- `admin` can disable `normal_user`
+- `admin` can delete `normal_user`
+- `super_admin` can disable `admin`
+- `super_admin` can delete `admin`
 - `admin` and `super_admin` can handle lower-risk board moderator assignment operations for existing `normal_user` accounts
 
 The helper scripts intentionally enforce a safer operational policy than the raw SQL surface. In particular, the board-moderator helper refuses to assign moderator rows to `admin` or `super_admin` accounts even though the raw SQL layer is more permissive.
@@ -89,7 +91,7 @@ A disabled account stops being able to mutate state because every write path sti
 
 ## Delete An Account
 
-Use `manage_account.py delete` to remove a normal user account. This is a `super_admin`-only operation.
+Use `manage_account.py delete` to remove an account that the current actor is allowed to manage. In practice, `admin` may delete `normal_user`, while `super_admin` may also delete `admin`.
 
 ```bash
 python3 skills/agent-kb-postgres-admin/scripts/manage_account.py delete --account-id 2

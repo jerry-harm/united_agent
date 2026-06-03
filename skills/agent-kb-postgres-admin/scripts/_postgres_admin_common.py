@@ -58,9 +58,14 @@ def run_sql_file(sql_path: Path, variables: dict[str, str]) -> int:
         rendered_sql = render_sql(connection, sql_path.read_text(encoding="utf-8"), variables)
         with connection.cursor() as cursor:
             cursor.execute(rendered_sql)
-            if cursor.description:
-                rows = cursor.fetchall()
-                print_table(cursor, rows)
+            result_description = cursor.description
+            result_rows = cursor.fetchall() if cursor.description else None
+            while cursor.nextset():
+                if cursor.description:
+                    result_description = cursor.description
+                    result_rows = cursor.fetchall()
+            if result_description is not None and result_rows is not None:
+                print_table(cursor, result_rows)
         connection.commit()
     return 0
 

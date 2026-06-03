@@ -227,6 +227,99 @@ with psycopg.connect(...) as connection:
 
 ---
 
+## Scenario: Board-scoped moderation and hard-delete content controls
+
+### 1. Scope / Trigger
+- Trigger: the PostgreSQL bootstrap schema now implements a stricter moderation matrix for `normal_user`, `board_moderator`, `admin`, and `super_admin` across posts, review entries/history, tags, post-tag associations, and account-management boundaries.
+
+### 2. Signatures
+- Identity / authorization helpers:
+  - `auth.can_moderate_board(target_board_id bigint) returns boolean`
+  - `auth.can_manage_account(target_account_id bigint) returns boolean`
+  - any helper added to resolve board scope for `review_history` / `post_tags` delete checks
+- Tables whose contracts are affected:
+  - `app.posts`
+  - `app.review_entries`
+  - `app.review_history`
+  - `app.tags`
+  - `app.post_tags`
+  - `auth.accounts`
+  - `auth.principal_global_roles`
+
+### 3. Contracts
+- `normal_user` may create posts but may not update or delete them after creation.
+- Ordinary role-path updates to `app.posts` must be limited to `verification`; content/body/title fields remain immutable after publication.
+- `normal_user` may create and update their own `app.review_entries`, and each update must still archive the previous value into `app.review_history`.
+- `normal_user` may not delete their own `app.review_entries`.
+- `board_moderator` may:
+  - update `app.posts.verification` within moderated boards
+  - hard-delete `app.posts`, `app.review_entries`, and `app.review_history` rows within moderated boards
+  - create/delete global `app.tags`
+  - manage `app.post_tags` for any post within moderated boards, including posts authored by others
+- `admin` may:
+  - create/update/delete `app.boards`
+  - update `app.posts.verification`
+  - hard-delete `app.posts`, `app.review_entries`, `app.review_history`, `app.tags`, and `app.post_tags`
+  - manage only normal-user accounts
+- `super_admin` inherits all `admin` capabilities and may manage `admin` accounts plus non-`super_admin` global-role changes.
+- `review_history` is readable by all roles.
+- `app.tags` must not expose an update path; only create/delete is allowed for moderator/admin/super_admin.
+- Hard delete is the only content-deletion model; do not add soft-delete columns for this workflow.
+- Every write-capable moderation/admin path must still gate on `auth.can_write()`.
+- `super_admin` grant/revoke remains a direct database-maintenance concern rather than a helper-exposed operator path.
+
+### 4. Validation & Error Matrix
+- disabled moderator/admin/super_admin attempting any write-capable moderation path -> deny via `auth.can_write()`
+- `normal_user` attempting post update/delete -> deny by RLS and/or column-level permission
+- `normal_user` attempting review-entry delete -> deny by RLS
+- moderator attempting to delete content outside moderated boards -> deny by RLS/helper scope check
+- `admin` attempting to manage an `admin` or `super_admin` account -> raise policy violation from helper SQL / target-account helper
+- helper-driven grant/revoke of `super_admin` -> raise policy violation and require direct DB maintenance instead
+- attempt to update `app.tags` -> deny because no update path exists
+
+### 5. Good/Base/Bad Cases
+- Good: a board moderator updates `app.posts.verification` on a post in their board and deletes a review entry in that same board.
+- Good: a normal user updates their own review entry and the old value appears in `app.review_history`.
+- Base: any authenticated role can read `app.review_history` rows.
+- Bad: allow a normal user to delete their own review entry or update post body/title after publication.
+- Bad: allow an `admin` account to disable/delete another `admin` because the helper only checked actor role and not target role.
+- Bad: expose `super_admin` grants through the ordinary helper surface.
+
+### 6. Tests Required
+- Static schema tests must prove:
+  - `app.posts` ordinary-role updates remain limited to `verification`
+  - `review_history` select policy is globally readable
+  - delete-capable moderation/admin policies include `auth.can_write()` where applicable
+  - `app.tags` has create/delete but no update contract
+- Live authorization coverage must prove:
+  - `normal_user` cannot update/delete posts and cannot delete review entries
+  - `board_moderator` can update `verification`, delete in-scope posts/review entries/review history, and manage in-scope post tags
+  - `admin` can delete posts/review entries/review history/tags/post tags
+  - `admin` cannot manage `admin` / `super_admin` targets
+  - `super_admin` can manage `admin` accounts and non-`super_admin` global-role changes
+  - disabled privileged accounts fail write-capable moderation/account-management flows
+
+### 7. Wrong vs Correct
+#### Wrong
+```sql
+CREATE POLICY posts_update_admin_or_moderator ON app.posts
+  FOR UPDATE TO united_agent_user
+  USING (auth.is_admin() OR auth.is_board_moderator(board_id));
+```
+
+#### Correct
+```sql
+CREATE POLICY posts_update_verification_moderator_or_admin ON app.posts
+  FOR UPDATE TO united_agent_user
+  USING (auth.can_write() AND auth.can_moderate_board(board_id))
+  WITH CHECK (auth.can_write() AND auth.can_moderate_board(board_id));
+
+REVOKE UPDATE ON app.posts FROM united_agent_user;
+GRANT UPDATE (verification) ON app.posts TO united_agent_user;
+```
+
+---
+
 ## Scenario: Ordinary-user connect verification helper
 
 ### 1. Scope / Trigger

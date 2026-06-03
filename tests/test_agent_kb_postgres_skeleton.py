@@ -56,6 +56,8 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             "CREATE FUNCTION auth.current_account_status()",
             "CREATE FUNCTION auth.has_global_role(p_role_name auth.global_role)",
             "CREATE FUNCTION auth.is_board_moderator(target_board_id bigint)",
+            "CREATE FUNCTION auth.can_moderate_board(target_board_id bigint)",
+            "CREATE FUNCTION auth.can_manage_account(target_account_id bigint)",
             "CREATE FUNCTION auth.can_write()",
             "CREATE FUNCTION auth.create_account_login(",
             "CREATE TRIGGER trg_review_history",
@@ -80,10 +82,23 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             "WITH CHECK (auth.can_write() AND auth.is_admin())",
             "USING (auth.can_write() AND auth.is_super_admin())",
             "WITH CHECK (auth.can_write() AND auth.is_super_admin())",
-            "USING (auth.can_write() AND (auth.is_admin() OR auth.is_board_moderator(board_id)))",
-            "WITH CHECK (auth.can_write() AND (auth.is_admin() OR auth.is_board_moderator(board_id)))",
+            "USING (auth.can_moderate_board(board_id))",
+            "WITH CHECK (auth.can_moderate_board(board_id))",
             "USING (auth.can_write() AND account_id = auth.current_account_id())",
-            "USING (auth.can_write() AND auth.is_admin());",
+            "USING (auth.can_manage_account(id))",
+            "auth.can_moderate_board((SELECT p.board_id",
+        ):
+            self.assertIn(expected, content)
+
+    def test_schema_limits_post_updates_to_verification_and_review_history_is_globally_readable(self) -> None:
+        content = self.read_text("postgres/init/001-united-agent.sql")
+
+        for expected in (
+            "CREATE POLICY review_history_select_all ON app.review_history",
+            "USING (true);",
+            "REVOKE UPDATE ON app.posts FROM united_agent_user;",
+            "GRANT UPDATE (verification) ON app.posts TO united_agent_user;",
+            "REVOKE UPDATE ON app.tags FROM united_agent_user;",
         ):
             self.assertIn(expected, content)
 

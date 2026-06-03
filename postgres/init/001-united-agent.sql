@@ -207,6 +207,20 @@ AS $$
   );
 $$;
 
+CREATE FUNCTION auth.account_has_global_role(target_account_id bigint, p_role_name auth.global_role) RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = auth, pg_catalog
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM auth.principal_global_roles AS pgr
+    WHERE pgr.account_id = target_account_id
+      AND pgr.role_name = p_role_name
+  );
+$$;
+
 -- 写能力集中闸门：调用方必须能解析到已知账号且状态仍为 active。
 CREATE FUNCTION auth.can_write() RETURNS boolean
 LANGUAGE sql
@@ -216,6 +230,42 @@ SET search_path = auth, pg_catalog
 AS $$
   SELECT auth.current_account_id() IS NOT NULL
      AND auth.current_account_status() = 'active'::auth.account_status;
+$$;
+
+CREATE FUNCTION auth.can_moderate_board(target_board_id bigint) RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = auth, pg_catalog
+AS $$
+  SELECT auth.can_write()
+     AND (
+       auth.is_admin()
+       OR auth.is_board_moderator(target_board_id)
+     );
+$$;
+
+CREATE FUNCTION auth.can_manage_account(target_account_id bigint) RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = auth, pg_catalog
+AS $$
+  SELECT auth.can_write()
+     AND EXISTS (
+       SELECT 1
+       FROM auth.accounts AS a
+       WHERE a.id = target_account_id
+         AND a.pg_login_role <> 'deleted_account_tombstone'
+     )
+     AND NOT auth.account_has_global_role(target_account_id, 'super_admin')
+     AND (
+       auth.is_super_admin()
+       OR (
+         auth.is_admin()
+         AND NOT auth.account_has_global_role(target_account_id, 'admin')
+       )
+     );
 $$;
 
 -- 特权 helper：创建 PostgreSQL 登录并挂到共享运行时角色上，供应用访问。
@@ -252,6 +302,84 @@ EXCEPTION
   WHEN others THEN
     IF to_regrole(p_pg_login_role) IS NOT NULL THEN
       EXECUTE format('DROP ROLE %I', p_pg_login_role);
+    END IF;
+    RAISE;
+END;
+$$;
+
+CREATE FUNCTION auth.delete_managed_account(p_target_account_id bigint) RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = auth, app, pg_catalog
+AS $$
+DECLARE
+  target_id bigint;
+  target_login text;
+  tombstone_id bigint;
+  reassigned_posts bigint;
+  reassigned_reviews bigint;
+  reassigned_history bigint;
+  posts_trigger_disabled boolean := false;
+BEGIN
+  SELECT a.id, a.pg_login_role INTO target_id, target_login
+  FROM auth.accounts AS a
+  WHERE a.id = p_target_account_id;
+
+  IF target_id IS NULL THEN
+    RAISE EXCEPTION 'account % does not exist', p_target_account_id;
+  END IF;
+
+  IF NOT auth.can_manage_account(target_id) THEN
+    RAISE EXCEPTION 'policy violation: actor may only delete permitted accounts';
+  END IF;
+
+  SELECT a.id INTO tombstone_id
+  FROM auth.accounts AS a
+  WHERE a.pg_login_role = 'deleted_account_tombstone';
+
+  IF tombstone_id IS NULL THEN
+    RAISE EXCEPTION 'shared deleted-account tombstone is missing from auth.accounts';
+  END IF;
+
+  IF tombstone_id = target_id THEN
+    RAISE EXCEPTION 'policy violation: cannot delete the shared deleted-account tombstone';
+  END IF;
+
+  ALTER TABLE app.posts DISABLE TRIGGER trg_posts_immutable;
+  posts_trigger_disabled := true;
+
+  UPDATE app.posts
+  SET author_id = tombstone_id
+  WHERE author_id = target_id;
+  GET DIAGNOSTICS reassigned_posts = ROW_COUNT;
+
+  ALTER TABLE app.posts ENABLE TRIGGER trg_posts_immutable;
+  posts_trigger_disabled := false;
+
+  UPDATE app.review_entries
+  SET account_id = tombstone_id
+  WHERE account_id = target_id;
+  GET DIAGNOSTICS reassigned_reviews = ROW_COUNT;
+
+  UPDATE app.review_history
+  SET replaced_by = tombstone_id
+  WHERE replaced_by = target_id;
+  GET DIAGNOSTICS reassigned_history = ROW_COUNT;
+
+  DELETE FROM auth.principal_global_roles WHERE account_id = target_id;
+  DELETE FROM auth.board_moderators WHERE account_id = target_id;
+  DELETE FROM auth.accounts WHERE id = target_id;
+
+  IF to_regrole(target_login) IS NOT NULL THEN
+    EXECUTE format('DROP ROLE %I', target_login);
+  END IF;
+
+  RAISE NOTICE 'deleted account % (login %): reassigned % posts, % review entries, % review history rows to tombstone',
+    target_id, target_login, reassigned_posts, reassigned_reviews, reassigned_history;
+EXCEPTION
+  WHEN others THEN
+    IF posts_trigger_disabled THEN
+      ALTER TABLE app.posts ENABLE TRIGGER trg_posts_immutable;
     END IF;
     RAISE;
 END;
@@ -327,6 +455,9 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA auth TO united_agent_user;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA app TO united_agent_user;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth TO united_agent_user;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA app TO united_agent_user;
+REVOKE UPDATE ON app.posts FROM united_agent_user;
+GRANT UPDATE (verification) ON app.posts TO united_agent_user;
+REVOKE UPDATE ON app.tags FROM united_agent_user;
 
 -- 所有受管表启用 RLS，把行可见性与写授权的最终判定保留在 PostgreSQL。
 ALTER TABLE auth.accounts ENABLE ROW LEVEL SECURITY;
@@ -355,8 +486,16 @@ CREATE POLICY accounts_select_self_or_admin ON auth.accounts
 
 CREATE POLICY accounts_update_admin ON auth.accounts
   FOR UPDATE TO united_agent_user
-  USING (auth.can_write() AND auth.is_admin())
+  USING (auth.can_manage_account(id))
+  WITH CHECK (auth.can_manage_account(id));
+
+CREATE POLICY accounts_insert_admin ON auth.accounts
+  FOR INSERT TO united_agent_user
   WITH CHECK (auth.can_write() AND auth.is_admin());
+
+CREATE POLICY accounts_delete_admin ON auth.accounts
+  FOR DELETE TO united_agent_user
+  USING (auth.can_manage_account(id));
 
 CREATE POLICY principal_global_roles_select_self_or_admin ON auth.principal_global_roles
   FOR SELECT TO united_agent_user
@@ -367,6 +506,19 @@ CREATE POLICY principal_global_roles_write_super_admin ON auth.principal_global_
   FOR ALL TO united_agent_user
   USING (auth.can_write() AND auth.is_super_admin())
   WITH CHECK (auth.can_write() AND auth.is_super_admin());
+
+CREATE POLICY principal_global_roles_insert_admin_normal_user ON auth.principal_global_roles
+  FOR INSERT TO united_agent_user
+  WITH CHECK (
+    auth.can_write()
+    AND (
+      auth.is_super_admin()
+      OR (
+        auth.is_admin()
+        AND role_name = 'normal_user'::auth.global_role
+      )
+    )
+  );
 
 CREATE POLICY board_moderators_select_all ON auth.board_moderators
   FOR SELECT TO united_agent_user
@@ -392,6 +544,10 @@ CREATE POLICY boards_update_admin ON app.boards
   USING (auth.can_write() AND auth.is_admin())
   WITH CHECK (auth.can_write() AND auth.is_admin());
 
+CREATE POLICY boards_delete_admin ON app.boards
+  FOR DELETE TO united_agent_user
+  USING (auth.can_write() AND auth.is_admin());
+
 -- Post 全局可读，作者可发布 progressing 状态，admin / 版主可改 verification。
 CREATE POLICY posts_select_all ON app.posts
   FOR SELECT TO united_agent_user
@@ -407,8 +563,12 @@ CREATE POLICY posts_insert_authenticated ON app.posts
 
 CREATE POLICY posts_update_verification ON app.posts
   FOR UPDATE TO united_agent_user
-  USING (auth.can_write() AND (auth.is_admin() OR auth.is_board_moderator(board_id)))
-  WITH CHECK (auth.can_write() AND (auth.is_admin() OR auth.is_board_moderator(board_id)));
+  USING (auth.can_moderate_board(board_id))
+  WITH CHECK (auth.can_moderate_board(board_id));
+
+CREATE POLICY posts_delete_moderator_or_admin ON app.posts
+  FOR DELETE TO united_agent_user
+  USING (auth.can_moderate_board(board_id));
 
 -- Review entry 全局可读，每个账号只能写自己的 review 行。
 CREATE POLICY review_entries_select_all ON app.review_entries
@@ -424,10 +584,28 @@ CREATE POLICY review_entries_update_own ON app.review_entries
   USING (auth.can_write() AND account_id = auth.current_account_id())
   WITH CHECK (auth.can_write() AND account_id = auth.current_account_id());
 
--- review_history 是 admin 可读的审计数据。
-CREATE POLICY review_history_select_admin ON app.review_history
+CREATE POLICY review_entries_delete_moderator_or_admin ON app.review_entries
+  FOR DELETE TO united_agent_user
+  USING (
+    auth.can_write()
+    AND auth.can_moderate_board((SELECT p.board_id FROM app.posts AS p WHERE p.id = post_id))
+  );
+
+CREATE POLICY review_history_select_all ON app.review_history
   FOR SELECT TO united_agent_user
-  USING (auth.is_admin());
+  USING (true);
+
+CREATE POLICY review_history_delete_moderator_or_admin ON app.review_history
+  FOR DELETE TO united_agent_user
+  USING (
+    auth.can_write()
+    AND auth.can_moderate_board((
+      SELECT p.board_id
+      FROM app.review_entries AS re
+      JOIN app.posts AS p ON p.id = re.post_id
+      WHERE re.id = review_entry_id
+    ))
+  );
 
 CREATE POLICY tags_select_all ON app.tags
   FOR SELECT TO united_agent_user
@@ -449,12 +627,26 @@ CREATE POLICY tags_insert_moderator_or_admin ON app.tags
     )
   );
 
+CREATE POLICY tags_delete_moderator_or_admin ON app.tags
+  FOR DELETE TO united_agent_user
+  USING (
+    auth.can_write()
+    AND (
+      auth.is_admin()
+      OR EXISTS (
+        SELECT 1
+        FROM auth.board_moderators AS bm
+        WHERE bm.account_id = auth.current_account_id()
+      )
+    )
+  );
+
 CREATE POLICY post_tags_select_all ON app.post_tags
   FOR SELECT TO united_agent_user
   USING (true);
 
--- post tag 可由 post 作者或 admin 挂上，只有 admin 可以移除。
-CREATE POLICY post_tags_insert_author_or_admin ON app.post_tags
+-- post tag 可由 post 作者、版主或 admin 管理；版主范围受 board 授权约束。
+CREATE POLICY post_tags_insert_author_or_moderator ON app.post_tags
   FOR INSERT TO united_agent_user
   WITH CHECK (
     auth.can_write()
@@ -462,13 +654,30 @@ CREATE POLICY post_tags_insert_author_or_admin ON app.post_tags
       SELECT 1
       FROM app.posts AS p
       WHERE p.id = post_id
-        AND (p.author_id = auth.current_account_id() OR auth.is_admin())
+        AND (
+          p.author_id = auth.current_account_id()
+          OR auth.can_moderate_board(p.board_id)
+        )
     )
   );
 
-CREATE POLICY post_tags_delete_admin ON app.post_tags
+CREATE POLICY post_tags_delete_author_or_moderator ON app.post_tags
   FOR DELETE TO united_agent_user
-  USING (auth.can_write() AND auth.is_admin());
+  USING (
+    (
+      auth.can_write()
+      AND auth.can_moderate_board((SELECT p.board_id
+                                   FROM app.posts AS p
+                                   WHERE p.id = post_id))
+    )
+    OR EXISTS (
+        SELECT 1
+        FROM app.posts AS p
+        WHERE p.id = post_id
+          AND p.author_id = auth.current_account_id()
+          AND auth.can_write()
+      )
+  );
 
 -- 把本地 bootstrap 的 postgres 登录写入应用账号模型，开发环境自带一个 super_admin 身份。
 INSERT INTO auth.accounts (principal_type, display_name, pg_login_role, account_status)

@@ -11,6 +11,10 @@ BEGIN
     RAISE EXCEPTION 'account % does not exist', {{account_id}};
   END IF;
 
+  IF {{role_name}}::auth.global_role = 'super_admin'::auth.global_role THEN
+    RAISE EXCEPTION 'policy violation: use direct database maintenance for super_admin role changes';
+  END IF;
+
   INSERT INTO auth.principal_global_roles (account_id, role_name, granted_by)
   VALUES (target_id, {{role_name}}::auth.global_role, auth.current_account_id())
   ON CONFLICT (account_id, role_name) DO NOTHING;
