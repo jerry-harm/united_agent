@@ -545,3 +545,37 @@ Aligned postgres connect/admin skills, added ordinary-user/admin helper flows, u
 ### Next Steps
 
 - None - task complete
+
+
+## Session 17: Redesign PostgreSQL RLS permission model
+
+**Date**: 2026-06-03
+**Task**: Redesign PostgreSQL RLS permission model
+**Branch**: `main`
+
+### Summary
+
+Redesigned the PostgreSQL RLS and admin-helper permission model, updated backend specs/docs, and verified the full uv unittest suite including live PostgreSQL authorization coverage.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6d0781a` | (see git log) |
+| `33dc68d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
