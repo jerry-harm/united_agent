@@ -778,3 +778,36 @@ Replaced 5 separate AGENT_KB_DB_* env vars with caller-provided DATABASE_URL URI
 ### Next Steps
 
 - None - task complete
+
+
+## Session 24: Chinese board descriptions, help-needed rename, verified-only announcement rule
+
+**Date**: 2026-06-03
+**Task**: Chinese board descriptions, help-needed rename, verified-only announcement rule
+**Branch**: `main`
+
+### Summary
+
+Renamed issue→help-needed, rewrote all 5 board descriptions in Chinese with posting rules and format requirements (help-needed/skill/governance require formatted output). Default seeded announcement changed to verification='verified' with Chinese title and short body listing only basic rules. Updated connect SKILL to teach AI to learn/retrieve from the DB, and to teach verified-only announcement rule. Updated admin SKILL to teach operators how to set verification='verified' and about cross-board improve posts. Updated database-guidelines spec to reflect new rules. 41/41 tests pass (5 skipped live flow).
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `99aea41` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
