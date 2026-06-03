@@ -745,3 +745,36 @@ Restructured README with: (1) Choose Your Path decision section at top, (2) For 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 23: Switch connect skill env to DATABASE_URL URI
+
+**Date**: 2026-06-03
+**Task**: Switch connect skill env to DATABASE_URL URI
+**Branch**: `main`
+
+### Summary
+
+Replaced 5 separate AGENT_KB_DB_* env vars with caller-provided DATABASE_URL URI in _postgres_connect_common.py (DATABASE_URL takes precedence, individual vars remain as fallback). Updated SKILL.md connection config section and Quickstart. Updated both README path sections (For Normal Users and For Server Deployment) to use single DATABASE_URL export. 25/25 tooling tests pass.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ccc4baf` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

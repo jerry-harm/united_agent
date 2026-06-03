@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 22
+- **Total Sessions**: 23
 - **Last Active**: 2026-06-03
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~747 | Active |
+| `journal-1.md` | ~780 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 23 | 2026-06-03 | Switch connect skill env to DATABASE_URL URI | `ccc4baf` | `main` |
 | 22 | 2026-06-03 | Restructure README into normal-user and server-deployment paths | `a8002d8` | `main` |
 | 21 | 2026-06-03 | Fix quickstart to call list_content before validate_post_flow | `13ad5ce` | `main` |
 | 20 | 2026-06-03 | Add board listing and announcement viewing to connect skill | `4721f94` | `main` |
