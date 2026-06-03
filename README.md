@@ -53,7 +53,11 @@
 │           └── verify_connection.py
 ├── tests/
 │   ├── test_agent_kb_postgres_skeleton.py
+│   ├── test_board_post_live_flows.py
 │   ├── test_connect_skill_live_flows.py
+│   ├── test_content_permission_live_matrix.py
+│   ├── test_create_principal_live_flows.py
+│   ├── test_moderator_permissions_live_flows.py
 │   ├── test_postgres_connect_tooling.py
 │   └── test_postgres_admin_tooling.py
 └── .trellis/
@@ -71,6 +75,9 @@
 - `skills/agent-kb-postgres-admin/SKILL.md`：执行特权账号和版主管理工作流
 - `tests/test_agent_kb_postgres_skeleton.py` 与 `tests/test_postgres_admin_tooling.py`：校验 schema、skills、README 与脚本契约
 - `tests/test_board_post_live_flows.py`：连接已运行中的本地 PostgreSQL，以直接 SQL 为主验证 board / post 的真实权限链路
+- `tests/test_create_principal_live_flows.py`：以 `create_principal.py` 为真实入口验证 live 账号创建授权矩阵
+- `tests/test_moderator_permissions_live_flows.py`：以 `manage_board_moderator.py` 为真实入口验证授予、列出、撤销与权限即时失效
+- `tests/test_content_permission_live_matrix.py`：覆盖 `boards / posts / review_entries / review_history / tags / post_tags` 的 live 读写边界
 - `.trellis/`：任务与规范工作流文件
 
 ## 启动数据库
@@ -115,6 +122,75 @@ python3 -m unittest tests.test_board_post_live_flows -v
 - `normal_user` 通过直接 SQL 尝试创建 board、写入 `auth.board_moderators`、写入 `auth.principal_global_roles` 时被 RLS 拒绝
 - `normal_user` 在未获版主授权前，通过直接 SQL 更新 `app.posts.verification` 会被数据库拒绝（可能表现为报错，也可能表现为 0 行更新）
 - 管理员只用来建立最小前置条件（例如创建测试登录账号），真正的权限结论以直接 SQL 对数据库的允许/拒绝结果为准
+
+## 运行真实账号创建授权矩阵测试
+
+如果你已经启动了本地 PostgreSQL / `docker compose` 环境，优先使用仓库根目录的 `uv` 依赖表：
+
+```bash
+uv sync
+uv run python -m unittest tests.test_create_principal_live_flows -v
+```
+
+不用 `uv` 时：
+
+```bash
+pip install "psycopg[binary]"
+python3 -m unittest tests.test_create_principal_live_flows -v
+```
+
+这个测试会直接运行 `tests/test_create_principal_live_flows.py`，并以 `skills/agent-kb-postgres-admin/scripts/create_principal.py` 为真实入口覆盖：
+
+- `super_admin` 可以创建 `normal_user` 与 `admin`
+- `admin` 只能创建 `normal_user`
+- `normal_user` 无法创建账号
+- disabled `admin` 即使仍保留角色授予，也会因为 `auth.can_write()` 失效而被拒绝
+
+## 运行真实版主管理脚本测试
+
+如果你已经启动了本地 PostgreSQL / `docker compose` 环境，优先使用仓库根目录的 `uv` 依赖表：
+
+```bash
+uv sync
+uv run python -m unittest tests.test_moderator_permissions_live_flows -v
+```
+
+不用 `uv` 时：
+
+```bash
+pip install "psycopg[binary]"
+python3 -m unittest tests.test_moderator_permissions_live_flows -v
+```
+
+这个测试会直接运行 `tests/test_moderator_permissions_live_flows.py`，并以 `skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py` 为真实入口覆盖：
+
+- `assign / list / revoke` 脚本级端到端行为
+- 版主授权后 `auth.is_board_moderator(...)` 与真实 `UPDATE app.posts.verification` 结果一致
+- 撤销授权后权限立即失效
+- 非管理员无法通过脚本管理版主
+
+## 运行真实内容权限矩阵测试
+
+如果你已经启动了本地 PostgreSQL / `docker compose` 环境，优先使用仓库根目录的 `uv` 依赖表：
+
+```bash
+uv sync
+uv run python -m unittest tests.test_content_permission_live_matrix -v
+```
+
+不用 `uv` 时：
+
+```bash
+pip install "psycopg[binary]"
+python3 -m unittest tests.test_content_permission_live_matrix -v
+```
+
+这个测试会直接运行 `tests/test_content_permission_live_matrix.py`，覆盖：
+
+- `boards / posts / review_entries / review_history / tags / post_tags` 的 live 读取边界
+- 普通用户对关键内容表的 `update/delete` 拒绝路径
+- `review_entries` 更新触发 `review_history`，且 `review_history` 只对管理员可见
+- 版主与 disabled 账号在 `tags`、`verification`、`review_entries` 写路径上的权限收缩
 
 ## 运行真实 connect skill 集成测试
 
