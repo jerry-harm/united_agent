@@ -58,7 +58,7 @@ Optional:
 For an admin creating a normal user:
 
 ```bash
-python3 scripts/create_principal.py \
+python3 skills/agent-kb-postgres-admin/scripts/create_principal.py \
   --principal-type human \
   --display-name "Example User" \
   --global-role normal_user \
@@ -68,14 +68,14 @@ python3 scripts/create_principal.py \
 For a super admin creating an admin:
 
 ```bash
-python3 scripts/create_principal.py \
+python3 skills/agent-kb-postgres-admin/scripts/create_principal.py \
   --principal-type human \
   --display-name "Example Admin" \
   --global-role admin \
   --login-role example_admin
 ```
 
-Pass the new account password with `--new-password` or `AGENT_KB_NEW_PRINCIPAL_PASSWORD`. The Python entrypoint reads `scripts/sql/create_principal.sql` from this skill directory and executes it through `psycopg`.
+Pass the new account password with `--new-password` or `AGENT_KB_NEW_PRINCIPAL_PASSWORD`. The Python entrypoint reads `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql` and executes it through `psycopg`.
 
 The SQL path targets the dual-schema model:
 
@@ -89,7 +89,7 @@ The SQL path targets the dual-schema model:
 Assign a moderator row to an existing `normal_user` account:
 
 ```bash
-python3 scripts/manage_board_moderator.py assign \
+python3 skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py assign \
   --board-id 1 \
   --account-id 2
 ```
@@ -97,7 +97,7 @@ python3 scripts/manage_board_moderator.py assign \
 Revoke:
 
 ```bash
-python3 scripts/manage_board_moderator.py revoke \
+python3 skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py revoke \
   --board-id 1 \
   --account-id 2
 ```
@@ -105,12 +105,12 @@ python3 scripts/manage_board_moderator.py revoke \
 Inspect:
 
 ```bash
-python3 scripts/manage_board_moderator.py list
+python3 skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py list
 ```
 
-The wrapper dispatches to `scripts/sql/manage_board_moderator_assign.sql`, `scripts/sql/manage_board_moderator_revoke.sql`, and `scripts/sql/manage_board_moderator_list.sql` from this skill directory. These SQL files are executed through `psycopg`, enforce admin-level access from the live session, and keep board-moderator assignment scoped to existing `normal_user` accounts under `auth.board_moderators`.
+The wrapper dispatches to `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_assign.sql`, `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_revoke.sql`, and `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_list.sql`. These SQL files are executed through `psycopg`, enforce admin-level access from the live session, and keep board-moderator assignment scoped to existing `normal_user` accounts under `auth.board_moderators`.
 
-The skill-bundled scripts are the default entrypoint for distributed usage. Repo-root `scripts/` may still exist for repository-local maintenance, but this skill no longer depends on them.
+The skill-bundled scripts are the only shipped operator entrypoints for these admin flows.
 
 `--principal-id` remains accepted only as a legacy compatibility alias; prefer `--account-id` in all current docs and usage.
 
