@@ -86,11 +86,17 @@ SELECT id FROM auth.accounts WHERE pg_login_role = session_user;
 - Python entrypoints:
   - `python3 scripts/create_principal.py --principal-type <human|agent> --display-name <text> --global-role <normal_user|admin> --login-role <pg_role> [--new-password <password>]`
   - `python3 scripts/manage_board_moderator.py <assign|revoke|list> [--board-id <id> --account-id <id>]`
+  - `python3 skills/agent-kb-postgres-admin/scripts/create_principal.py --principal-type <human|agent> --display-name <text> --global-role <normal_user|admin> --login-role <pg_role> [--new-password <password>]`
+  - `python3 skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py <assign|revoke|list> [--board-id <id> --account-id <id>]`
 - SQL files executed by those entrypoints:
   - `scripts/sql/create_principal.sql`
   - `scripts/sql/manage_board_moderator_assign.sql`
   - `scripts/sql/manage_board_moderator_revoke.sql`
   - `scripts/sql/manage_board_moderator_list.sql`
+  - `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql`
+  - `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_assign.sql`
+  - `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_revoke.sql`
+  - `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_list.sql`
 
 ### 3. Contracts
 - Required environment keys:
@@ -105,6 +111,7 @@ SELECT id FROM auth.accounts WHERE pg_login_role = session_user;
   - Python environment with `psycopg` installed (recommended install command: `pip install "psycopg[binary]"`)
 - Execution contract:
   - Python wrappers must read the checked-in SQL file and execute it through `psycopg`.
+  - Skill-distributed entrypoints must resolve their SQL from the same skill directory so installing the skill does not depend on repo-root `scripts/`.
   - SQL files should keep placeholder tokens in the `{{name}}` form so the Python wrapper can render safe SQL literals before execution.
   - Helper SQL must derive actor privilege from `auth` helper functions and grant tables inside the database.
   - Helpers must not accept or trust a user-supplied actor-role override.
@@ -121,6 +128,7 @@ SELECT id FROM auth.accounts WHERE pg_login_role = session_user;
 
 ### 5. Good/Base/Bad Cases
 - Good: `python3 scripts/create_principal.py --principal-type human --display-name "Example User" --global-role normal_user --login-role example_user` from an `admin` session with `AGENT_KB_NEW_PRINCIPAL_PASSWORD` set.
+- Good: `python3 scripts/create_principal.py ...` and `python3 skills/agent-kb-postgres-admin/scripts/create_principal.py ...` remain behaviorally equivalent, with the skill path used for distributed skill workflows.
 - Base: `python3 scripts/manage_board_moderator.py list` from an `admin` session to inspect current assignments.
 - Bad: embedding privileged SQL directly inside Python strings and branching on a user-provided `--actor-role` flag.
 
@@ -128,6 +136,7 @@ SELECT id FROM auth.accounts WHERE pg_login_role = session_user;
 - Static tooling test must prove:
   - the Python entrypoints exist
   - the SQL files exist
+  - the skill-bundled entrypoints and SQL files exist when a skill documents them
   - the shared runner uses env defaults for port/name
   - the shared runner imports `psycopg`, reads SQL files from disk, and executes them through a cursor
   - account creation SQL targets `auth.accounts` and `auth.principal_global_roles`

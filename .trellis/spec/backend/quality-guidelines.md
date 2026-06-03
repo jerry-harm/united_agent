@@ -32,6 +32,7 @@ There is no dedicated lint config or type-checker config in the repo yet. Curren
 
 - Keep privileged business rules in SQL and execute them via checked-in files.
 - Reuse `scripts/_postgres_admin_common.py` for env loading, SQL rendering, and transaction execution instead of re-implementing connection code.
+- If a shipped skill documents executable helper scripts, bundle those helpers under the skill directory and keep their behavior aligned with the repo-root maintenance entrypoints.
 - Use placeholder rendering via `sql.Literal(...).as_string(connection)` rather than manual string concatenation.
 - Keep Python entrypoints thin: parse args, validate obvious inputs, delegate to SQL.
 - Add or update regression tests whenever changing:
@@ -48,7 +49,7 @@ There is no dedicated lint config or type-checker config in the repo yet. Curren
 For current backend changes, run at least:
 
 ```bash
-python3 -m py_compile scripts/_postgres_admin_common.py scripts/create_principal.py scripts/manage_board_moderator.py
+python3 -m py_compile scripts/_postgres_admin_common.py scripts/create_principal.py scripts/manage_board_moderator.py skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py skills/agent-kb-postgres-admin/scripts/create_principal.py skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py
 python3 -m unittest discover -s tests -v
 ```
 

@@ -12,6 +12,7 @@ The real backend surface is split across:
 - PostgreSQL bootstrap and policy logic in `postgres/init/`
 - thin Python admin entrypoints in `scripts/`
 - checked-in SQL files executed by those entrypoints in `scripts/sql/`
+- skill-bundled copies of shipped operator entrypoints under `skills/*/scripts/` when a distributed skill must be self-contained
 - regression tests in `tests/`
 - shipped operator skills in `skills/`
 
@@ -41,7 +42,17 @@ tests/
 └── test_postgres_admin_tooling.py
 
 skills/
-├── agent-kb-postgres-admin/SKILL.md
+├── agent-kb-postgres-admin/
+│   ├── SKILL.md
+│   └── scripts/
+│       ├── _postgres_admin_common.py
+│       ├── create_principal.py
+│       ├── manage_board_moderator.py
+│       └── sql/
+│           ├── create_principal.sql
+│           ├── manage_board_moderator_assign.sql
+│           ├── manage_board_moderator_revoke.sql
+│           └── manage_board_moderator_list.sql
 └── agent-kb-postgres-connect/SKILL.md
 ```
 
@@ -54,6 +65,7 @@ skills/
 - Put one operator-facing CLI entrypoint per operation family in `scripts/`.
   - `scripts/create_principal.py` handles account creation.
   - `scripts/manage_board_moderator.py` handles moderator assignment/revoke/list.
+- When a shipped skill must remain installable outside the full repo, bundle the exact Python/SQL resources it invokes under that skill's own `scripts/` tree.
 - Put SQL that performs privileged operations in checked-in files under `scripts/sql/`, not inline inside Python strings.
 - Put contract/regression checks in `tests/` and keep them focused on shipped files and behavior.
 
@@ -76,4 +88,5 @@ There are currently **no** HTTP handlers, background workers, or ORM model modul
 - `postgres/init/001-united-agent.sql` centralizes schema, helper functions, triggers, grants, and RLS.
 - `scripts/_postgres_admin_common.py` provides shared env loading, SQL templating, and transaction execution.
 - `scripts/create_principal.py` is a thin CLI that validates inputs and delegates to `scripts/sql/create_principal.sql`.
+- `skills/agent-kb-postgres-admin/scripts/create_principal.py` is the distributed skill copy of that same workflow and keeps the skill self-contained.
 - `tests/test_postgres_admin_tooling.py` verifies that Python wrappers still execute checked-in SQL files instead of drifting into ad hoc behavior.
