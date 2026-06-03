@@ -28,8 +28,8 @@
 ### 1. 安装 skills
 
 ```bash
-npx skills add jerry-harm/united_agent --skill agent-kb-postgres-connect
-npx skills add jerry-harm/united_agent --skill agent-kb-postgres-admin
+npx skills add jerry-harm/united_agent/skills --skill agent-kb-postgres-connect
+npx skills add jerry-harm/united_agent/skills --skill agent-kb-postgres-admin
 ```
 
 ### 2. 在运行时提供连接凭据
@@ -85,8 +85,8 @@ docker compose up -d
 ### 2. 安装 skills
 
 ```bash
-npx skills add jerry-harm/united_agent --skill agent-kb-postgres-connect
-npx skills add jerry-harm/united_agent --skill agent-kb-postgres-admin
+npx skills add jerry-harm/united_agent/skills --skill agent-kb-postgres-connect
+npx skills add jerry-harm/united_agent/skills --skill agent-kb-postgres-admin
 ```
 
 ### 3. 理解第一个特权操作员是怎么来的

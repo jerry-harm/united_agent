@@ -55,6 +55,8 @@ class PostgresAdminToolingTest(unittest.TestCase):
         content = self.read_text("README.md")
 
         self.assertIn("以 PostgreSQL 数据库本身为核心交付物", content)
+        self.assertIn("npx skills add jerry-harm/united_agent/skills --skill agent-kb-postgres-connect", content)
+        self.assertIn("npx skills add jerry-harm/united_agent/skills --skill agent-kb-postgres-admin", content)
         self.assertIn("skills/agent-kb-postgres-admin/SKILL.md", content)
         self.assertIn("skills/agent-kb-postgres-admin/scripts/create_principal.py", content)
         self.assertIn("skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py", content)
@@ -71,6 +73,8 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("不负责创建账号", content)
         self.assertIn("如果需要创建账号或管理权限，请改用 `skills/agent-kb-postgres-admin/SKILL.md`", content)
         self.assertIn("docs/developer-guide.md", content)
+        self.assertNotIn("npx skills add jerry-harm/united_agent --skill agent-kb-postgres-connect", content)
+        self.assertNotIn("npx skills add jerry-harm/united_agent --skill agent-kb-postgres-admin", content)
         self.assertNotIn("--global-role super_admin", content)
         self.assertNotIn("AGENT_KB_DB_HOST", content)
 

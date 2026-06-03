@@ -1,6 +1,6 @@
 ---
 name: agent-kb-postgres-connect
-description: Use when a user or agent already has PostgreSQL credentials for this repository and needs the standard Python and psycopg path to connect, verify the login works, confirm the session resolves to the expected auth.accounts identity, and exercise ordinary-user flows such as posting and review/commenting without doing privileged account or role management. Also covers: when to search/retrieve skill from the knowledge base, when to record a skill you found or created, verified-only announcement reading, and board-description-first posting rules.
+description: "Use when a user or agent already has PostgreSQL credentials for this repository and needs the standard Python and psycopg path to connect, verify the login works, confirm the session resolves to the expected auth.accounts identity, and exercise ordinary-user flows such as posting and review/commenting without doing privileged account or role management. Also covers: when to search/retrieve skill from the knowledge base, when to record a skill you found or created, verified-only announcement reading, and board-description-first posting rules."
 compatibility:
   - Python 3
   - psycopg
@@ -84,7 +84,7 @@ Primary:
 export DATABASE_URL=postgres://username:password@host:port/dbname
 ```
 
-Compatibility note: if `DATABASE_URL` is unavailable, the shipped helper still accepts legacy split `AGENT_KB_*` connection variables. The optional identity-check variables (`AGENT_KB_EXPECTED_LOGIN_ROLE`, `AGENT_KB_EXPECTED_DISPLAY_NAME`) are also still available for stricter verification.
+Compatibility note: if `DATABASE_URL` is unavailable, the shipped helper still accepts legacy split `AGENT_KB_*` connection variables such as `AGENT_KB_DB_HOST`, `AGENT_KB_DB_PORT`, `AGENT_KB_DB_NAME`, `AGENT_KB_DB_USER`, and `AGENT_KB_DB_PASSWORD`. The optional identity-check variables (`AGENT_KB_EXPECTED_LOGIN_ROLE`, `AGENT_KB_EXPECTED_DISPLAY_NAME`) are also still available for stricter verification.
 
 Quickstart:
 

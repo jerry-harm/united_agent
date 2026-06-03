@@ -16,6 +16,7 @@ class PostgresConnectToolingTest(unittest.TestCase):
         content = self.read_text("skills/agent-kb-postgres-connect/SKILL.md")
 
         self.assertIn("name: agent-kb-postgres-connect", content)
+        self.assertIn('description: "Use when a user or agent already has PostgreSQL credentials', content)
         self.assertIn("compatibility:", content)
         self.assertIn("psycopg", content)
         self.assertIn('uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/verify_connection.py', content)
@@ -96,6 +97,8 @@ class PostgresConnectToolingTest(unittest.TestCase):
         content = self.read_text("README.md")
 
         self.assertIn("npx skills", content)
+        self.assertIn("npx skills add jerry-harm/united_agent/skills --skill agent-kb-postgres-connect", content)
+        self.assertIn("npx skills add jerry-harm/united_agent/skills --skill agent-kb-postgres-admin", content)
         self.assertIn("skills/agent-kb-postgres-connect/scripts/verify_connection.py", content)
         self.assertIn("skills/agent-kb-postgres-connect/scripts/validate_post_flow.py", content)
         self.assertIn("skills/agent-kb-postgres-connect/scripts/validate_review_flow.py", content)
@@ -118,6 +121,8 @@ class PostgresConnectToolingTest(unittest.TestCase):
         self.assertIn("docs/developer-guide.md", content)
         self.assertIn("docs/design-philosophy.md", content)
         self.assertNotIn("uv sync --dev", content)
+        self.assertNotIn("npx skills add jerry-harm/united_agent --skill agent-kb-postgres-connect", content)
+        self.assertNotIn("npx skills add jerry-harm/united_agent --skill agent-kb-postgres-admin", content)
         self.assertNotIn("python3 scripts/verify_connection.py", content)
         self.assertNotIn("tests/test_connect_skill_live_flows.py", content)
         self.assertNotIn("读取 `DATABASE_URL` 或 `AGENT_KB_*` 变量", content)
