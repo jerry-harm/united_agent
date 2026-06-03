@@ -54,7 +54,7 @@ In plain terms: admin can create normal_user, super_admin can create admin, only
 
 The shipped operator surface intentionally keeps board-moderator assignment scoped to existing `normal_user` accounts. That restriction is enforced by the shipped SQL/database layer, while the Python wrapper stays focused on argument handling and dispatch.
 
-Stated plainly: super_admin can change any global role, admin does not change global roles, moderator assignment stays scoped to existing normal_user accounts, and account delete reassigns posts and review/comment rows to the shared tombstone account.
+Stated plainly: super_admin can change any global role, admin does not change global roles, moderation/admin paths handle `posts.verification`, moderator assignment stays scoped to existing normal_user accounts, privileged content removal is hard delete, and account delete reassigns posts and review/comment rows to the shared tombstone account.
 
 ## Run `connect` First
 
@@ -143,7 +143,7 @@ The skill-bundled scripts are the only shipped operator entrypoints for these ad
 
 ## Publish and Approve Announcements
 
-Announcements with `verification = 'verified'` are read by AI; `progressing` / `rejected` are ignored.
+Announcements with `verification = 'verified'` are read by AI; `progressing` / `rejected` are ignored. In practice, moderation/admin approval is the path that changes `posts.verification`, and privileged removal uses hard delete rather than soft delete.
 
 Publish a new announcement by inserting into the `announcement` board (default `verification = 'progressing'`), then approve it by setting `verification = 'verified'` through the shipped SQL/database-admin path.
 
