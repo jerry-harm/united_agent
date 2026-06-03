@@ -977,3 +977,36 @@ Rewrote README in Chinese and both shipped skills in English to clarify bootstra
 ### Next Steps
 
 - None - task complete
+
+
+## Session 30: Fix connect YAML and skill install path
+
+**Date**: 2026-06-04
+**Task**: Fix connect YAML and skill install path
+**Branch**: `main`
+
+### Summary
+
+Fixed the GitHub YAML/frontmatter parse error in agent-kb-postgres-connect by quoting the long description field, corrected shipped install commands to use jerry-harm/united_agent/skills, updated wording tests, and re-ran py_compile plus the full unittest suite.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8424b19` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
