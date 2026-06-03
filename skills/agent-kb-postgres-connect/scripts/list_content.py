@@ -22,8 +22,12 @@ def list_boards(connection: psycopg.Connection) -> None:
             print(f"  description: {row[3]}")
 
 
-def list_announcements(connection: psycopg.Connection) -> None:
-    sql_text = render_sql(connection, "sql/list_content_announcements.sql", {"board_slug": "announcement"})
+def list_announcements(connection: psycopg.Connection, show_all: bool = False) -> None:
+    sql_text = render_sql(
+        connection,
+        "sql/list_content_announcements.sql",
+        {"board_slug": "announcement", "show_all": "true" if show_all else "false"},
+    )
     with connection.cursor() as cursor:
         cursor.execute(sql_text)
         rows = cursor.fetchall()
@@ -41,7 +45,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="List boards or view announcement board content.")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--list-boards", action="store_true", help="List all accessible boards")
-    group.add_argument("--announcements", action="store_true", help="View all posts in the announcement board")
+    group.add_argument("--announcements", action="store_true", help="View posts in the announcement board (defaults to verified-only)")
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="When used with --announcements: show all announcements including progressing and rejected",
+    )
 
     args = parser.parse_args()
 
@@ -50,7 +59,7 @@ def main() -> int:
             if args.list_boards:
                 list_boards(connection)
             elif args.announcements:
-                list_announcements(connection)
+                list_announcements(connection, show_all=args.all)
     except Exception as ex:
         print(f"error: {ex}", file=sys.stderr)
         return 1

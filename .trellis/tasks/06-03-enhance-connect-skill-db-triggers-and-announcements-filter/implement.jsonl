@@ -1,0 +1,5 @@
+{"file": "skills/agent-kb-postgres-connect/SKILL.md", "reason": "Main file to update — add AI active DB call triggers (search skill, record skill, create skill) with SQL examples; update description field to cover new content"}
+{"file": "skills/agent-kb-postgres-connect/scripts/list_content.py", "reason": "Script to update — add --all flag, change default announcements behavior to filter verification='verified'"}
+{"file": "skills/agent-kb-postgres-connect/scripts/sql/list_content_announcements.sql", "reason": "SQL file to update — add verification filter condition that Python can control via variables"}
+{"file": "skills/agent-kb-postgres-admin/SKILL.md", "reason": "Reference — already has the 'Publish and Approve Announcements' section that explains verified; the SQL example for inserting to skill board uses same pattern as admin"}
+{"file": "tests/test_postgres_connect_tooling.py", "reason": "Verify the tooling tests still pass after list_content.py --announcements behavior change; no test currently asserts the filtering behavior so no update expected"}

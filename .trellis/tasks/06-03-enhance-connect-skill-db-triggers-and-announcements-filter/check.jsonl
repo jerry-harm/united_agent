@@ -1,0 +1,4 @@
+{"file": "skills/agent-kb-postgres-connect/SKILL.md", "reason": "Verify the skill now has: (a) three DB interaction triggers with SQL examples, (b) announcement reading SQL shows verified filter, (c) description field updated"}
+{"file": "skills/agent-kb-postgres-connect/scripts/list_content.py", "reason": "Verify --announcements default filters to verified; --all shows all with status; help text updated"}
+{"file": "skills/agent-kb-postgres-connect/scripts/sql/list_content_announcements.sql", "reason": "Verify SQL uses :board_id and :verification variables so Python can control filtering"}
+{"file": "tests/test_postgres_connect_tooling.py", "reason": "Verify all 7 connect tooling tests pass after changes"}
