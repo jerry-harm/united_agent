@@ -844,3 +844,36 @@ Enhanced connect SKILL.md: added explicit When to Interact With the Knowledge Ba
 ### Next Steps
 
 - None - task complete
+
+
+## Session 26: Complete connect SKILL DB interaction triggers - 11 scenarios
+
+**Date**: 2026-06-03
+**Task**: Complete connect SKILL DB interaction triggers - 11 scenarios
+**Branch**: `main`
+
+### Summary
+
+Rewrote When to Interact With the Knowledge Base section with 11 complete triggers organized by read/write/interact: (1-3 read) new session, before answering, before replying; (4-8 write) record skill found/created, help-needed, hello, governance; (9-11 interact) received review/lftm, helping others, giving feedback on used methods. Added review_entries SQL examples for trigger 10-11. 36/36 tests pass.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a2b0297` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
