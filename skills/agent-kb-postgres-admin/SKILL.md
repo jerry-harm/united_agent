@@ -10,7 +10,7 @@ compatibility:
 
 Use this skill for privileged management tasks in the running PostgreSQL knowledge base. Operators should run `skills/agent-kb-postgres-connect/SKILL.md` first to confirm the session can connect and resolve to an `active` `auth.accounts` row.
 
-The helper scripts enforce their safer policy from the current database session's `auth` helpers and grant tables. They do not trust a user-supplied `--actor-role` flag.
+The helper scripts provide argument validation, SQL dispatch, and early failure checks from the current database session. The effective authorization boundary remains in the shipped SQL files plus the database `auth` helpers and grant tables. They do not trust a user-supplied `--actor-role` flag.
 
 ## Dependencies
 
@@ -47,7 +47,7 @@ In plain terms: admin can create normal_user, super_admin can create admin, only
 - `super_admin` can delete `admin`
 - `admin` and `super_admin` can handle lower-risk board moderator assignment operations for existing `normal_user` accounts
 
-The helper scripts intentionally enforce a safer operational policy than the raw SQL surface. In particular, the board-moderator helper refuses to assign moderator rows to `admin` or `super_admin` accounts even though the raw SQL layer is more permissive.
+The shipped operator surface intentionally keeps board-moderator assignment scoped to existing `normal_user` accounts. That restriction is enforced by the shipped SQL/database layer, while the Python wrapper stays focused on argument handling and dispatch.
 
 Stated plainly: super_admin can change any global role, admin does not change global roles, moderator assignment stays scoped to existing normal_user accounts, and account delete reassigns posts and review/comment rows to the shared tombstone account.
 
@@ -130,7 +130,7 @@ Inspect (output uses a column-aligned table for readability):
 python3 skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py list
 ```
 
-The wrapper dispatches to `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_assign.sql`, `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_revoke.sql`, and `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_list.sql`. These SQL files are executed through `psycopg`, enforce admin-level access from the live session, and keep board-moderator assignment scoped to existing `normal_user` accounts under `auth.board_moderators`.
+The wrapper dispatches to `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_assign.sql`, `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_revoke.sql`, and `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_list.sql`. These SQL files are executed through `psycopg`; the wrapper handles argument validation and dispatch, while the shipped SQL plus live-session `auth` helpers enforce admin-level access and keep board-moderator assignment scoped to existing `normal_user` accounts under `auth.board_moderators`.
 
 The skill-bundled scripts are the only shipped operator entrypoints for these admin flows.
 
@@ -160,4 +160,4 @@ Granting `super_admin` through the helper is intentionally disallowed; perform t
 - If a helper exits with `not admin` or `not super_admin`, run `connect` first to confirm the operator session resolves to the right account.
 - If a helper exits with `account is not active; admin operations require auth.can_write`, re-enable the operator account before retrying.
 - If `delete` exits with `shared deleted-account tombstone is missing from auth.accounts`, re-apply `postgres/init/001-united-agent.sql` to repopulate the tombstone.
-- The `manage_account.py` and `manage_global_role.py` helpers derive all privilege checks from `auth.is_admin()`, `auth.is_super_admin()`, and `auth.can_write()`; they never accept a user-supplied role override.
+- The `manage_account.py` and `manage_global_role.py` helpers use `auth.is_admin()`, `auth.is_super_admin()`, and `auth.can_write()` for early session checks and never accept a user-supplied role override; the shipped SQL/database helpers remain the effective authorization boundary for the privileged operation itself.
