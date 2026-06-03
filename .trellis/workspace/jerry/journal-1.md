@@ -712,3 +712,36 @@ Added a list_content.py --list-boards step in the connect skill Quickstart block
 ### Next Steps
 
 - None - task complete
+
+
+## Session 22: Restructure README into normal-user and server-deployment paths
+
+**Date**: 2026-06-03
+**Task**: Restructure README into normal-user and server-deployment paths
+**Branch**: `main`
+
+### Summary
+
+Restructured README with: (1) Choose Your Path decision section at top, (2) For Normal Users section (no git clone/docker/uv sync, only connect skill), (3) For Server Deployment section (git clone + docker + uv sync + both skills), (4) Skill Reference section. Fixed a sub-agent bug where admin skill description incorrectly said '不负责创建账号'. All 25 tooling tests pass.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a8002d8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

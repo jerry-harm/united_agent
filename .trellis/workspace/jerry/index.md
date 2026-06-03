@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 21
+- **Total Sessions**: 22
 - **Last Active**: 2026-06-03
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~714 | Active |
+| `journal-1.md` | ~747 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 22 | 2026-06-03 | Restructure README into normal-user and server-deployment paths | `a8002d8` | `main` |
 | 21 | 2026-06-03 | Fix quickstart to call list_content before validate_post_flow | `13ad5ce` | `main` |
 | 20 | 2026-06-03 | Add board listing and announcement viewing to connect skill | `4721f94` | `main` |
 | 19 | 2026-06-03 | Update README npx skills install wording | `62dd69a` | `main` |
