@@ -1,0 +1,6 @@
+{"role": "check", "step": 1, "action": "Run uv run python -m unittest tests.test_postgres_connect_tooling tests.test_postgres_admin_tooling and confirm all tests pass."}
+{"role": "check", "step": 2, "action": "Grep the rewritten README.md to verify all required string literals are present (npx skills, uv sync, uv run python skills/agent-kb-postgres-connect/scripts/verify_connection.py, python3 skills/agent-kb-postgres-connect/scripts/verify_connection.py, all script paths, all Chinese description strings)."}
+{"role": "check", "step": 3, "action": "Grep the README for 'uv sync', 'docker compose', 'git clone', 'admin' in the 'For Normal Users' section — all should be absent."}
+{"role": "check", "step": 4, "action": "Confirm the README has two distinct path sections appearing before any step-by-step instructions, with a decision section at the very top."}
+{"role": "check", "step": 5, "action": "Confirm the 'For Server Deployment' section includes git clone, docker compose up -d, uv sync, and both npx skills add commands."}
+{"role": "check", "step": 6, "action": "Confirm the 'Skill Reference' section (formerly '什么时候用哪个 skill') explains that normal users only need connect skill and server deployers need both."}
