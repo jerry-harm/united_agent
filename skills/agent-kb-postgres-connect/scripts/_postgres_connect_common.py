@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import psycopg
+from psycopg import sql
 
 
 IDENTITY_QUERY = """
@@ -63,3 +65,13 @@ def format_identity_row(row: tuple[str, str, int, str, str, str]) -> list[str]:
         f"display_name={display_name}",
         f"pg_login_role={pg_login_role}",
     ]
+
+
+def render_sql(connection: psycopg.Connection, sql_path: str, variables: dict[str, str] | None = None) -> str:
+    raw = (Path(__file__).parent / sql_path).read_text(encoding="utf-8")
+    if not variables:
+        return raw
+    rendered = raw
+    for key, val in (variables or {}).items():
+        rendered = rendered.replace(f"{{{key}}}", val)
+    return rendered

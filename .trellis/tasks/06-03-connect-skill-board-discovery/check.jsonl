@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Defines skill-bundled helpers and README/skill contract rules the check sub-agent needs."}
+{"file": "skills/agent-kb-postgres-connect/SKILL.md", "reason": "The file under change; check must verify the new list_content.py section."}

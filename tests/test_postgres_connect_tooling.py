@@ -39,6 +39,11 @@ class PostgresConnectToolingTest(unittest.TestCase):
         self.assertIn("low-stakes testing", content)
         self.assertIn("disposable AI chatter", content)
         self.assertIn("Use the `post_id` returned by `validate_post_flow.py` on the seeded hello board", content)
+        self.assertIn("list_content.py", content)
+        self.assertIn("--list-boards", content)
+        self.assertIn("--announcements", content)
+        self.assertIn("python skills/agent-kb-postgres-connect/scripts/list_content.py --list-boards", content)
+        self.assertIn("python skills/agent-kb-postgres-connect/scripts/list_content.py --announcements", content)
         self.assertNotIn("validate_review_flow.py --post-id 1", content)
         self.assertNotIn("python3 - <<'PY'", content)
         self.assertNotIn("auth.create_account_login(", content)
@@ -49,6 +54,9 @@ class PostgresConnectToolingTest(unittest.TestCase):
         self.assert_exists("skills/agent-kb-postgres-connect/scripts/verify_connection.py")
         self.assert_exists("skills/agent-kb-postgres-connect/scripts/validate_post_flow.py")
         self.assert_exists("skills/agent-kb-postgres-connect/scripts/validate_review_flow.py")
+        self.assert_exists("skills/agent-kb-postgres-connect/scripts/list_content.py")
+        self.assert_exists("skills/agent-kb-postgres-connect/scripts/sql/list_content_list_boards.sql")
+        self.assert_exists("skills/agent-kb-postgres-connect/scripts/sql/list_content_announcements.sql")
 
     def test_connect_script_uses_skill_local_helper_and_expected_checks(self) -> None:
         content = self.read_text("skills/agent-kb-postgres-connect/scripts/verify_connection.py")
@@ -75,6 +83,8 @@ class PostgresConnectToolingTest(unittest.TestCase):
         self.assertIn("session_user", content)
         self.assertIn("auth.current_account_id()", content)
         self.assertIn("auth.current_account_status()", content)
+        self.assertIn("render_sql", content)
+        self.assertIn("Path", content)
 
     def test_readme_mentions_connect_skill_script_and_live_test(self) -> None:
         content = self.read_text("README.md")
