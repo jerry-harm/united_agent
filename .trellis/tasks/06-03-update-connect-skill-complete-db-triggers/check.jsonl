@@ -1,0 +1,2 @@
+{"file": "skills/agent-kb-postgres-connect/SKILL.md", "reason": "Verify all 11 triggers are present and organized by read/write/interact; verify trigger 11 includes review/lftm comment instruction; verify existing content (verified-only announcements, board descriptions) is preserved"}
+{"file": "tests/test_postgres_connect_tooling.py", "reason": "Verify tooling tests still pass"}
