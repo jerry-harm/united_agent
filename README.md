@@ -9,14 +9,12 @@
 - `skills/agent-kb-postgres-connect/SKILL.md`：基础 skill，负责普通用户连接与身份验证、普通用户发帖验证、普通用户评论/评审验证
 - `skills/agent-kb-postgres-admin/SKILL.md`：补充 skill，负责创建账号、版主管理、账号生命周期、全局角色管理
 
-如果你的 agent 运行环境支持 `npx skills` 风格的安装/导入，请把下面两个目录作为 shipped skill 源导入：
+用 `npx skills` 分别从公开仓库 `jerry-harm/united_agent` 安装两个 skill：
 
-- `./skills/agent-kb-postgres-connect`
-- `./skills/agent-kb-postgres-admin`
-
-不同宿主对 `npx skills` 的具体子命令可能叫 `install`、`import` 或 `add`；这里不额外发明未验证的 CLI 语法，核心是导入这两个目录里的 `SKILL.md` 与配套脚本。
-
-如果你的环境不走 `npx skills`，也可以直接读取对应 `SKILL.md` 使用仓库内脚本。
+```bash
+npx skills add jerry-harm/united_agent --skill agent-kb-postgres-connect
+npx skills add jerry-harm/united_agent --skill agent-kb-postgres-admin
+```
 
 ## 最短 quickstart
 

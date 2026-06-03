@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Defines README alignment and the no-fabricated-CLI-syntax rule the check needs to verify."}
+{"file": "README.md", "reason": "The file under change; the check must review the new install block."}

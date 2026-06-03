@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Defines README alignment with shipped skills and the rule against documenting unverified CLI syntax."}
+{"file": "README.md", "reason": "The file under change; sub-agent must edit it directly."}
