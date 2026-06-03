@@ -1010,3 +1010,37 @@ Fixed the GitHub YAML/frontmatter parse error in agent-kb-postgres-connect by qu
 ### Next Steps
 
 - None - task complete
+
+
+## Session 31: Make admin helpers DATABASE_URL-only
+
+**Date**: 2026-06-04
+**Task**: Make admin helpers DATABASE_URL-only
+**Branch**: `main`
+
+### Summary
+
+Changed postgres admin helpers to require DATABASE_URL, removed duplicate .agents skill copies, updated shipped docs/spec/tests to match the new admin connection contract, and then added a concise wording pass to clarify ordinary-user and moderation permission boundaries in the connect/admin skills.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `05d1052` | (see git log) |
+| `91a255a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
