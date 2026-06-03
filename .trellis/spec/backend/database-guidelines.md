@@ -233,11 +233,15 @@ with psycopg.connect(...) as connection:
 - Trigger: the distributed `agent-kb-postgres-connect` skill now ships a reusable Python helper for ordinary-user connection and identity verification.
 
 ### 2. Signatures
-- Python entrypoint:
+- Python entrypoints:
   - `uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/verify_connection.py`
-  - `python3 skills/agent-kb-postgres-connect/scripts/verify_connection.py` (fallback when `uv` is unavailable)
+  - `uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/validate_post_flow.py`
+  - `uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/validate_review_flow.py`
+  - `python3 skills/agent-kb-postgres-connect/scripts/<entrypoint>.py` (fallback when `uv` is unavailable)
 - Skill-bundled files:
   - `skills/agent-kb-postgres-connect/scripts/verify_connection.py`
+  - `skills/agent-kb-postgres-connect/scripts/validate_post_flow.py`
+  - `skills/agent-kb-postgres-connect/scripts/validate_review_flow.py`
   - `skills/agent-kb-postgres-connect/scripts/_postgres_connect_common.py`
 
 ### 3. Contracts
@@ -254,7 +258,9 @@ with psycopg.connect(...) as connection:
   - Python environment with `psycopg` available; docs should prefer `uv run --with "psycopg[binary]" ...` while keeping a plain `python3` fallback path.
 - Execution contract:
   - The helper connects with the provided login credentials.
-  - The helper must verify `current_user`, `session_user`, `auth.current_account_id()`, `auth.current_account_status()`, `display_name`, and `pg_login_role` from the mapped `auth.accounts` row.
+  - `verify_connection.py` must verify `current_user`, `session_user`, `auth.current_account_id()`, `auth.current_account_status()`, `display_name`, and `pg_login_role` from the mapped `auth.accounts` row.
+  - `validate_post_flow.py` must stay ordinary-user-scoped and validate create/list behavior for posts without privileged role mutation.
+  - `validate_review_flow.py` must stay ordinary-user-scoped and validate comment/review creation paths without privileged role mutation.
   - Identity resolution must remain based on `session_user`.
   - The helper stays ordinary-user-only and must not create accounts, grant roles, or manage moderators.
 
@@ -263,10 +269,11 @@ with psycopg.connect(...) as connection:
 - inactive mapped account -> exit with `account <id> is not active: <status>`
 - expected login role mismatch -> exit with `expected pg_login_role=...`
 - expected display name mismatch -> exit with `expected display_name=...`
+- ordinary-user post/review validation failure -> exit non-zero after surfacing the failing SQL assertion so operators can see which flow broke
 - connection/auth failure before query -> let the connection error surface so the operator fixes host / port / db / login / password first
 
 ### 5. Good/Base/Bad Cases
-- Good: reconnect as a mapped `normal_user` login and print `connection ok` plus resolved identity fields.
+- Good: reconnect as a mapped `normal_user` login, run `verify_connection.py`, then validate post and review/comment flows with the two dedicated entrypoints.
 - Base: run the helper as the local bootstrap `postgres` account and confirm the bootstrap `auth.accounts` row resolves.
 - Bad: treat a PostgreSQL login without an `auth.accounts` mapping as success.
 - Bad: let the helper drift into privileged bootstrap or role-management behavior.
@@ -275,22 +282,26 @@ with psycopg.connect(...) as connection:
 - Static tooling test must prove:
   - the bundled helper files exist
   - the helper uses the skill-local common module
-  - the helper checks `session_user`, `auth.current_account_id()`, and `auth.current_account_status()`
+  - the identity helper checks `session_user`, `auth.current_account_id()`, and `auth.current_account_status()`
+  - the post/review flow entrypoints exist and are documented from the shipped skill/README surface
   - the skill and README prefer `uv` while preserving a `python3` fallback
 - Live integration coverage should prove:
   - a mapped active login succeeds and prints resolved identity info
   - an unmapped login fails clearly
   - a disabled mapped account fails clearly
+  - an ordinary user can exercise the shipped post and review/comment validation flows
 
 ### 7. Wrong vs Correct
 #### Wrong
 ```bash
 python3 - <<'PY'
-# long inline verification flow copied out of the skill body
+# long inline connect/post/review flow copied out of the skill body
 PY
 ```
 
 #### Correct
 ```bash
 uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/verify_connection.py
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/validate_post_flow.py
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/validate_review_flow.py
 ```

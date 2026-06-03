@@ -40,16 +40,25 @@ skills/
 │   ├── SKILL.md
 │   └── scripts/
 │       ├── _postgres_connect_common.py
+│       ├── validate_post_flow.py
+│       ├── validate_review_flow.py
 │       └── verify_connection.py
 ├── agent-kb-postgres-admin/
 │   ├── SKILL.md
 │   └── scripts/
 │       ├── _postgres_admin_common.py
 │       ├── create_principal.py
+│       ├── manage_account.py
 │       ├── manage_board_moderator.py
+│       ├── manage_global_role.py
 │       └── sql/
 │           ├── create_principal.sql
+│           ├── manage_account_delete.sql
+│           ├── manage_account_disable.sql
 │           ├── manage_board_moderator_assign.sql
+│           ├── manage_global_role_grant.sql
+│           ├── manage_global_role_list.sql
+│           ├── manage_global_role_revoke.sql
 │           ├── manage_board_moderator_revoke.sql
 │           └── manage_board_moderator_list.sql
 ```
@@ -63,8 +72,13 @@ skills/
 - Put reusable Python connection/env/SQL-rendering helpers inside the shipped skill that owns the workflow, e.g. `skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py`.
 - Put one operator-facing CLI entrypoint per operation family under the relevant skill's `scripts/` directory.
   - `skills/agent-kb-postgres-admin/scripts/create_principal.py` handles account creation.
+  - `skills/agent-kb-postgres-admin/scripts/manage_account.py` handles account disable/delete lifecycle operations.
   - `skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py` handles moderator assignment/revoke/list.
+  - `skills/agent-kb-postgres-admin/scripts/manage_global_role.py` handles global-role grant/revoke/list.
 - For ordinary-user distributed verification flows, bundle connection helpers under the connect skill directory rather than relying on inline heredoc snippets in `SKILL.md`.
+  - `skills/agent-kb-postgres-connect/scripts/verify_connection.py` handles connection and identity verification.
+  - `skills/agent-kb-postgres-connect/scripts/validate_post_flow.py` handles ordinary-user post validation.
+  - `skills/agent-kb-postgres-connect/scripts/validate_review_flow.py` handles ordinary-user review/comment validation.
 - When a shipped skill must remain installable outside the full repo, bundle the exact Python/SQL resources it invokes under that skill's own `scripts/` tree.
 - Put SQL that performs privileged operations in checked-in files under the same shipped skill directory as the invoking Python entrypoint, not inline inside Python strings.
 - Put contract/regression checks in `tests/` and keep them focused on shipped files and behavior.
@@ -89,6 +103,9 @@ There are currently **no** HTTP handlers, background workers, or ORM model modul
 - `pyproject.toml` is a repository-local uv manifest for script/test dependencies, not a declaration of an application server or publishable Python package.
 - `skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py` provides shared env loading, SQL templating, and transaction execution for shipped admin workflows.
 - `skills/agent-kb-postgres-admin/scripts/create_principal.py` is a thin CLI that validates inputs and delegates to `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql`.
+- `skills/agent-kb-postgres-admin/scripts/manage_account.py` delegates account lifecycle changes to checked-in SQL helpers.
+- `skills/agent-kb-postgres-admin/scripts/manage_global_role.py` delegates global-role changes to checked-in SQL helpers.
 - `skills/agent-kb-postgres-connect/scripts/verify_connection.py` is the distributed ordinary-user entrypoint for connection and identity verification.
+- `skills/agent-kb-postgres-connect/scripts/validate_post_flow.py` and `validate_review_flow.py` keep ordinary-user validation flows split into small task-specific scripts.
 - `tests/test_postgres_admin_tooling.py` verifies that Python wrappers still execute checked-in SQL files instead of drifting into ad hoc behavior.
 - `tests/test_postgres_connect_tooling.py` verifies the shipped connect skill, bundled scripts, and README contract stay aligned.

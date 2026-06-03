@@ -1,21 +1,17 @@
 BEGIN;
 
--- Rebuild the managed schemas from scratch for local bootstrap.
--- This init path is intentionally destructive so the SQL file remains the
--- single source of truth for the current dev schema.
+-- 本地 bootstrap 直接重建受管 schema，确保本 init 脚本仍是当前 dev schema 的唯一来源。
 DROP SCHEMA IF EXISTS app CASCADE;
 DROP SCHEMA IF EXISTS auth CASCADE;
 
--- Split identity/authorization concerns from business-content tables.
+-- 把身份/授权相关表与业务内容表分到不同 schema。
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE SCHEMA IF NOT EXISTS app;
 
--- Lock down the default schema so the application role only uses explicitly
--- managed objects under auth/app.
+-- 锁定 public schema，避免应用角色绕过 auth/app 显式管理对象。
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 
--- Shared runtime role for application logins created by the bootstrap/admin
--- workflow. Individual login roles inherit table/function access from here.
+-- bootstrap / admin 流程为每个应用登录共享的运行时角色；具体登录从它继承表与函数权限。
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'united_agent_user') THEN
@@ -24,15 +20,14 @@ BEGIN
 END
 $$;
 
--- Core enum types that define the MVP's identity, moderation, and review
--- state machine directly in PostgreSQL.
+-- MVP 核心枚举类型：身份、版主、review 状态机直接落在 PostgreSQL。
 CREATE TYPE auth.principal_type AS ENUM ('human', 'agent');
 CREATE TYPE auth.global_role AS ENUM ('super_admin', 'admin', 'normal_user');
 CREATE TYPE auth.account_status AS ENUM ('active', 'disabled');
 CREATE TYPE app.board_type AS ENUM ('discussion', 'announcement');
 CREATE TYPE app.verification_state AS ENUM ('progressing', 'verified', 'rejected');
 
--- Identity and authorization tables live under auth.
+-- 身份与授权表都在 auth schema。
 CREATE TABLE auth.accounts (
   id bigserial PRIMARY KEY,
   principal_type auth.principal_type NOT NULL,
@@ -43,8 +38,7 @@ CREATE TABLE auth.accounts (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- Global role grants are normalized into their own table so one account can
--- hold multiple roles without overloading the account row.
+-- 全局角色授予拆出独立表，单账号可持有多个角色，避免压扁到账号行。
 CREATE TABLE auth.principal_global_roles (
   account_id bigint NOT NULL REFERENCES auth.accounts(id) ON DELETE CASCADE,
   role_name auth.global_role NOT NULL,
@@ -53,7 +47,7 @@ CREATE TABLE auth.principal_global_roles (
   PRIMARY KEY (account_id, role_name)
 );
 
--- Business-content tables live under app.
+-- 业务内容表都在 app schema。
 CREATE TABLE app.boards (
   id bigserial PRIMARY KEY,
   slug text NOT NULL UNIQUE CHECK (btrim(slug) <> ''),
@@ -64,8 +58,7 @@ CREATE TABLE app.boards (
   created_by bigint NOT NULL REFERENCES auth.accounts(id) ON DELETE RESTRICT
 );
 
--- Board-scoped moderator grants stay in auth because they are authorization
--- relationships, not content owned by the board itself.
+-- 版主授权表留在 auth：它属于授权关系，不是 board 自身内容。
 CREATE TABLE auth.board_moderators (
   board_id bigint NOT NULL REFERENCES app.boards(id) ON DELETE CASCADE,
   account_id bigint NOT NULL REFERENCES auth.accounts(id) ON DELETE CASCADE,
@@ -121,8 +114,7 @@ CREATE TABLE app.post_tags (
   PRIMARY KEY (post_id, tag_id)
 );
 
--- Indexes cover foreign-key and authorization-heavy lookup paths used by the
--- helper functions and RLS policies below.
+-- 索引覆盖 RLS 与版主查询中的外键 / 授权热点路径。
 CREATE INDEX idx_principal_global_roles_role_name ON auth.principal_global_roles(role_name, account_id);
 CREATE INDEX idx_board_moderators_account_id ON auth.board_moderators(account_id, board_id);
 CREATE INDEX idx_posts_board ON app.posts(board_id);
@@ -131,7 +123,7 @@ CREATE INDEX idx_posts_verification ON app.posts(board_id, verification);
 CREATE INDEX idx_review_history_entry ON app.review_history(review_entry_id);
 CREATE INDEX idx_post_tags_tag ON app.post_tags(tag_id);
 
--- Shared timestamp trigger for mutable tables that expose updated_at.
+-- 暴露 updated_at 的可变表共用的时间戳触发器。
 CREATE FUNCTION auth.set_updated_at() RETURNS trigger
 LANGUAGE plpgsql
 AS $$
@@ -141,8 +133,7 @@ BEGIN
 END;
 $$;
 
--- Resolve the current application account from the authenticated PostgreSQL
--- login role.
+-- 把当前应用账号从已认证的 PostgreSQL 登录解析出来。
 CREATE FUNCTION auth.current_account_id() RETURNS bigint
 LANGUAGE sql
 STABLE
@@ -154,7 +145,7 @@ AS $$
   WHERE a.pg_login_role = session_user;
 $$;
 
--- Resolve the current account status for write gating and policy checks.
+-- 解析当前账号状态，供写路径与策略判定使用。
 CREATE FUNCTION auth.current_account_status() RETURNS auth.account_status
 LANGUAGE sql
 STABLE
@@ -166,7 +157,7 @@ AS $$
   WHERE a.pg_login_role = session_user;
 $$;
 
--- Generic global-role helper used to build narrower admin checks.
+-- 通用全局角色判定，给更细的 admin 检查用。
 CREATE FUNCTION auth.has_global_role(p_role_name auth.global_role) RETURNS boolean
 LANGUAGE sql
 STABLE
@@ -181,7 +172,7 @@ AS $$
   );
 $$;
 
--- Admin covers both admin and super_admin grants.
+-- admin 同时覆盖 admin 与 super_admin 授予。
 CREATE FUNCTION auth.is_admin() RETURNS boolean
 LANGUAGE sql
 STABLE
@@ -191,8 +182,7 @@ AS $$
   SELECT auth.has_global_role('admin') OR auth.has_global_role('super_admin');
 $$;
 
--- Super-admin stays separate because some write paths are stricter than plain
--- admin operations.
+-- super_admin 独立保留：部分写路径比普通 admin 更严格。
 CREATE FUNCTION auth.is_super_admin() RETURNS boolean
 LANGUAGE sql
 STABLE
@@ -202,8 +192,7 @@ AS $$
   SELECT auth.has_global_role('super_admin');
 $$;
 
--- Board moderation is evaluated per board so post-verification writes can be
--- delegated without granting global admin.
+-- 版主身份按 board 判定，便于在不发全局 admin 的前提下委托帖子的 verification 写操作。
 CREATE FUNCTION auth.is_board_moderator(target_board_id bigint) RETURNS boolean
 LANGUAGE sql
 STABLE
@@ -218,8 +207,7 @@ AS $$
   );
 $$;
 
--- Central write-eligibility gate: the caller must resolve to a known account
--- and that account must still be active.
+-- 写能力集中闸门：调用方必须能解析到已知账号且状态仍为 active。
 CREATE FUNCTION auth.can_write() RETURNS boolean
 LANGUAGE sql
 STABLE
@@ -230,8 +218,7 @@ AS $$
      AND auth.current_account_status() = 'active'::auth.account_status;
 $$;
 
--- Privileged helper that creates a PostgreSQL login and attaches it to the
--- shared runtime role for application access.
+-- 特权 helper：创建 PostgreSQL 登录并挂到共享运行时角色上，供应用访问。
 CREATE FUNCTION auth.create_account_login(
   p_pg_login_role text,
   p_pg_password text
@@ -270,8 +257,7 @@ EXCEPTION
 END;
 $$;
 
--- Persist the previous review state before an update overwrites the current
--- review row.
+-- 在 update 覆盖当前 review 行前先持久化旧 review 状态。
 CREATE FUNCTION app.capture_review_history() RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -289,8 +275,7 @@ BEGIN
 END;
 $$;
 
--- Posts are append-only content after publication; only moderation state may
--- change later.
+-- Post 发布后即只读，仅 verification 可在后续流程中调整。
 CREATE FUNCTION app.enforce_post_immutability() RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = app, auth, pg_catalog
@@ -307,7 +292,7 @@ BEGIN
 END;
 $$;
 
--- Triggers keep updated_at current and enforce the review/post invariants.
+-- 触发器统一维护 updated_at，并落实 review / post 的不变量。
 CREATE TRIGGER trg_accounts_updated_at
 BEFORE UPDATE ON auth.accounts
 FOR EACH ROW
@@ -333,8 +318,7 @@ BEFORE UPDATE ON app.posts
 FOR EACH ROW
 EXECUTE FUNCTION app.enforce_post_immutability();
 
--- The shared runtime role can touch only explicitly granted schemas, tables,
--- sequences, and helper functions.
+-- 共享运行时角色只能落在显式授予的 schema / 表 / 序列 / helper function 上。
 GRANT USAGE ON SCHEMA auth TO united_agent_user;
 GRANT USAGE ON SCHEMA app TO united_agent_user;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA auth TO united_agent_user;
@@ -344,8 +328,7 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA app TO united_agent_user;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth TO united_agent_user;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA app TO united_agent_user;
 
--- Every managed table uses RLS so PostgreSQL remains the source of truth for
--- row visibility and write authorization.
+-- 所有受管表启用 RLS，把行可见性与写授权的最终判定保留在 PostgreSQL。
 ALTER TABLE auth.accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE auth.accounts FORCE ROW LEVEL SECURITY;
 ALTER TABLE auth.principal_global_roles ENABLE ROW LEVEL SECURITY;
@@ -365,8 +348,7 @@ ALTER TABLE app.tags FORCE ROW LEVEL SECURITY;
 ALTER TABLE app.post_tags ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.post_tags FORCE ROW LEVEL SECURITY;
 
--- Accounts and global-role grants are self-readable, with admin visibility for
--- management workflows.
+-- 账号与全局角色授权对自身可读，管理流程对 admin 可见。
 CREATE POLICY accounts_select_self_or_admin ON auth.accounts
   FOR SELECT TO united_agent_user
   USING (id = auth.current_account_id() OR auth.is_admin());
@@ -380,7 +362,7 @@ CREATE POLICY principal_global_roles_select_self_or_admin ON auth.principal_glob
   FOR SELECT TO united_agent_user
   USING (account_id = auth.current_account_id() OR auth.is_admin());
 
--- Global-role grants are writable only by super-admins.
+-- 全局角色授权只有 super_admin 可写。
 CREATE POLICY principal_global_roles_write_super_admin ON auth.principal_global_roles
   FOR ALL TO united_agent_user
   USING (auth.can_write() AND auth.is_super_admin())
@@ -390,7 +372,7 @@ CREATE POLICY board_moderators_select_all ON auth.board_moderators
   FOR SELECT TO united_agent_user
   USING (true);
 
--- Board-moderator grants are admin-managed authorization data.
+-- 版主授权是 admin 管理的授权数据。
 CREATE POLICY board_moderators_write_admin ON auth.board_moderators
   FOR ALL TO united_agent_user
   USING (auth.can_write() AND auth.is_admin())
@@ -400,7 +382,7 @@ CREATE POLICY boards_select_all ON app.boards
   FOR SELECT TO united_agent_user
   USING (true);
 
--- Boards are globally readable, but only admins can create or edit them.
+-- Board 全局可读，只有 admin 可以创建或修改。
 CREATE POLICY boards_insert_admin ON app.boards
   FOR INSERT TO united_agent_user
   WITH CHECK (auth.is_admin() AND auth.can_write() AND created_by = auth.current_account_id());
@@ -410,8 +392,7 @@ CREATE POLICY boards_update_admin ON app.boards
   USING (auth.can_write() AND auth.is_admin())
   WITH CHECK (auth.can_write() AND auth.is_admin());
 
--- Posts are globally readable. Authors create their own progressing posts,
--- while admins or board moderators update verification state.
+-- Post 全局可读，作者可发布 progressing 状态，admin / 版主可改 verification。
 CREATE POLICY posts_select_all ON app.posts
   FOR SELECT TO united_agent_user
   USING (true);
@@ -429,8 +410,7 @@ CREATE POLICY posts_update_verification ON app.posts
   USING (auth.can_write() AND (auth.is_admin() OR auth.is_board_moderator(board_id)))
   WITH CHECK (auth.can_write() AND (auth.is_admin() OR auth.is_board_moderator(board_id)));
 
--- Review entries are globally readable, but each account writes only its own
--- review row.
+-- Review entry 全局可读，每个账号只能写自己的 review 行。
 CREATE POLICY review_entries_select_all ON app.review_entries
   FOR SELECT TO united_agent_user
   USING (true);
@@ -444,7 +424,7 @@ CREATE POLICY review_entries_update_own ON app.review_entries
   USING (auth.can_write() AND account_id = auth.current_account_id())
   WITH CHECK (auth.can_write() AND account_id = auth.current_account_id());
 
--- Review-history rows are admin-readable audit data.
+-- review_history 是 admin 可读的审计数据。
 CREATE POLICY review_history_select_admin ON app.review_history
   FOR SELECT TO united_agent_user
   USING (auth.is_admin());
@@ -453,8 +433,7 @@ CREATE POLICY tags_select_all ON app.tags
   FOR SELECT TO united_agent_user
   USING (true);
 
--- Tags are globally readable; creation is limited to admins or accounts that
--- already hold a board-moderator assignment.
+-- Tag 全局可读，只有 admin 或已持有版主授权的账号可以创建。
 CREATE POLICY tags_insert_moderator_or_admin ON app.tags
   FOR INSERT TO united_agent_user
   WITH CHECK (
@@ -474,8 +453,7 @@ CREATE POLICY post_tags_select_all ON app.post_tags
   FOR SELECT TO united_agent_user
   USING (true);
 
--- Post tags can be attached by the post author or an admin, but only admins
--- may remove them.
+-- post tag 可由 post 作者或 admin 挂上，只有 admin 可以移除。
 CREATE POLICY post_tags_insert_author_or_admin ON app.post_tags
   FOR INSERT TO united_agent_user
   WITH CHECK (
@@ -492,8 +470,7 @@ CREATE POLICY post_tags_delete_admin ON app.post_tags
   FOR DELETE TO united_agent_user
   USING (auth.can_write() AND auth.is_admin());
 
--- Seed the local bootstrap postgres login into the application account model
--- so development starts with one super-admin identity.
+-- 把本地 bootstrap 的 postgres 登录写入应用账号模型，开发环境自带一个 super_admin 身份。
 INSERT INTO auth.accounts (principal_type, display_name, pg_login_role, account_status)
 VALUES ('human', 'Local Postgres Bootstrap', 'postgres', 'active')
 ON CONFLICT (pg_login_role) DO NOTHING;
@@ -503,5 +480,23 @@ SELECT id, 'super_admin', id
 FROM auth.accounts
 WHERE pg_login_role = 'postgres'
 ON CONFLICT (account_id, role_name) DO NOTHING;
+
+-- 在 schema init 阶段预置一个共享 tombstone 身份（the shared deleted account tombstone），
+-- 让 admin delete 流程可以把作者帖子与 review/comment 行转移到一个稳定占位，避免违反
+-- app.posts / app.review_entries / app.review_history 回指 auth.accounts 的
+-- ON DELETE RESTRICT 外键。tombstone 账号是 NOLOGIN、不持全局角色，且 account_status 固定为
+-- 'disabled'，普通用户流程无法冒充它。共享 tombstone 账号由 manage_account.py delete SQL
+-- 通过 deleted_account_tombstone 登录引用。
+DO $$
+BEGIN
+  IF to_regrole('deleted_account_tombstone') IS NULL THEN
+    CREATE ROLE deleted_account_tombstone NOLOGIN;
+  END IF;
+END
+$$;
+
+INSERT INTO auth.accounts (principal_type, display_name, pg_login_role, account_status)
+VALUES ('agent', 'Deleted Account Tombstone', 'deleted_account_tombstone', 'disabled')
+ON CONFLICT (pg_login_role) DO NOTHING;
 
 COMMIT;

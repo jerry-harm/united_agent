@@ -59,7 +59,56 @@ def run_sql_file(sql_path: Path, variables: dict[str, str]) -> int:
         with connection.cursor() as cursor:
             cursor.execute(rendered_sql)
             if cursor.description:
-                for row in cursor.fetchall():
-                    print("\t".join("" if value is None else str(value) for value in row))
+                rows = cursor.fetchall()
+                print_table(cursor, rows)
         connection.commit()
     return 0
+
+
+def open_connection() -> psycopg.Connection:
+    env = db_env()
+    return psycopg.connect(
+        host=env["host"],
+        port=env["port"],
+        dbname=env["name"],
+        user=env["user"],
+        password=env["password"],
+    )
+
+
+def require_admin(connection: psycopg.Connection, *, need_super_admin: bool = False) -> None:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT auth.is_admin(), auth.is_super_admin(), auth.can_write(), auth.current_account_id()"
+        )
+        is_admin, is_super_admin, can_write, account_id = cursor.fetchone()
+    if account_id is None:
+        raise SystemExit("login resolved to no auth.accounts row")
+    if need_super_admin and not is_super_admin:
+        raise SystemExit("not super_admin")
+    if not is_admin:
+        raise SystemExit("not admin")
+    if not can_write:
+        raise SystemExit("account is not active; admin operations require auth.can_write")
+
+
+def print_table(cursor: psycopg.Cursor, rows: list[tuple]) -> None:
+    if cursor.description is None:
+        return
+    columns = [column.name for column in cursor.description]
+    if not rows:
+        print("no rows")
+        return
+    str_rows: list[list[str]] = [
+        ["" if value is None else str(value) for value in row] for row in rows
+    ]
+    widths = [len(column) for column in columns]
+    for row in str_rows:
+        for index, cell in enumerate(row):
+            widths[index] = max(widths[index], len(cell))
+    header = " | ".join(column.ljust(widths[index]) for index, column in enumerate(columns))
+    separator = "-+-".join("-" * width for width in widths)
+    print(header)
+    print(separator)
+    for row in str_rows:
+        print(" | ".join(cell.ljust(widths[index]) for index, cell in enumerate(row)))

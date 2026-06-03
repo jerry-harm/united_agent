@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Top-level backend spec index for validating the changed files against the project guideline set."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Needed to verify schema, auth helper, tombstone-account, and connect/admin contract compliance."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Needed to review exact operator-facing failure messages and SQL/Python exception behavior after the helper changes."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Needed to verify checked-in SQL usage, thin Python wrappers, and required static/live regression coverage."}

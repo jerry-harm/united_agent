@@ -1,6 +1,6 @@
 ---
 name: agent-kb-postgres-admin
-description: Use when a user or agent needs to do privileged PostgreSQL account or board-moderator administration for this repository, especially account creation with the project's safer admin policy and environment-variable-based connection flow.
+description: Use when a user or agent needs to do privileged PostgreSQL account or board-moderator administration for this repository, especially account creation with the project's safer admin policy, account disable/delete lifecycle, global role changes, and board moderator management. Operators are expected to run `connect` first; this skill does not import code from `connect` but shares the same environment-variable contract.
 compatibility:
   - Python 3
   - psycopg
@@ -8,7 +8,7 @@ compatibility:
 
 # Agent KB Postgres Admin
 
-Use this skill for privileged management tasks in the running PostgreSQL knowledge base.
+Use this skill for privileged management tasks in the running PostgreSQL knowledge base. Operators should run `skills/agent-kb-postgres-connect/SKILL.md` first to confirm the session can connect and resolve to an `active` `auth.accounts` row.
 
 The helper scripts enforce their safer policy from the current database session's `auth` helpers and grant tables. They do not trust a user-supplied `--actor-role` flag.
 
@@ -20,28 +20,9 @@ This skill expects Python with `psycopg` installed.
 pip install "psycopg[binary]"
 ```
 
-## Use This For
+## Bootstrap Environment Variables
 
-- creating a `normal_user` account
-- creating an `admin` account
-- assigning or revoking board moderator access for `normal_user` accounts
-- checking the current privileged-management policy before touching SQL
-
-## Privilege Policy
-
-In plain terms: admin can create normal_user, super_admin can create admin, only super_admin changes global roles, and board moderator assignment is a lower-risk operation for `normal_user` accounts.
-
-- `admin` can create `normal_user`
-- `super_admin` can create `admin`
-- `super_admin` can change any global role
-- `admin` does not change global roles
-- `admin` and `super_admin` can handle lower-risk board moderator assignment operations for existing `normal_user` accounts
-
-The helper scripts intentionally enforce a safer operational policy than the raw SQL surface. In particular, the board-moderator helper refuses to assign moderator rows to `admin` or `super_admin` accounts even though the raw SQL layer is more permissive.
-
-Stated plainly: super_admin can change any global role, admin does not change global roles, and moderator assignment stays scoped to existing normal_user accounts.
-
-## Required Environment Variables
+Set these in the operator's shell profile or in `~/.config/united_agent/.env`; the skill reads them from `os.environ` and never writes them to disk.
 
 - `AGENT_KB_DB_HOST`
 - `AGENT_KB_DB_USER`
@@ -52,6 +33,25 @@ Optional:
 - `AGENT_KB_DB_PORT` (default `5432`)
 - `AGENT_KB_DB_NAME` (default `united_agent`)
 - `AGENT_KB_NEW_PRINCIPAL_PASSWORD` for new-account creation
+
+## Privilege Policy
+
+In plain terms: admin can create normal_user, super_admin can create admin, only super_admin changes global roles, only super_admin deletes accounts, and board moderator assignment is a lower-risk operation for `normal_user` accounts.
+
+- `admin` can create `normal_user`
+- `super_admin` can create `admin`
+- `super_admin` can change any global role
+- `super_admin` can delete an account
+- `admin` can disable an account
+- `admin` and `super_admin` can handle lower-risk board moderator assignment operations for existing `normal_user` accounts
+
+The helper scripts intentionally enforce a safer operational policy than the raw SQL surface. In particular, the board-moderator helper refuses to assign moderator rows to `admin` or `super_admin` accounts even though the raw SQL layer is more permissive.
+
+Stated plainly: super_admin can change any global role, admin does not change global roles, moderator assignment stays scoped to existing normal_user accounts, and account delete reassigns posts and review/comment rows to the shared tombstone account.
+
+## Run `connect` First
+
+Operators should run `connect` first and resolve the connect-level error before retrying admin operations. The shipped entrypoints assume the operator session can already connect, resolves to an `active` `auth.accounts` row, and exercises ordinary-user flows.
 
 ## Create An Account
 
@@ -77,12 +77,32 @@ python3 skills/agent-kb-postgres-admin/scripts/create_principal.py \
 
 Pass the new account password with `--new-password` or `AGENT_KB_NEW_PRINCIPAL_PASSWORD`. The Python entrypoint reads `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql` and executes it through `psycopg`.
 
-The SQL path targets the dual-schema model:
+## Disable An Account
 
-- `auth.accounts`
-- `auth.principal_global_roles`
-- `auth.current_account_id()`
-- `auth.is_admin()` / `auth.is_super_admin()`
+Use `manage_account.py disable` to mark an existing account as `disabled`. The underlying PostgreSQL login role is preserved so existing credentials and authored history stay intact.
+
+```bash
+python3 skills/agent-kb-postgres-admin/scripts/manage_account.py disable --account-id 2
+```
+
+A disabled account stops being able to mutate state because every write path still requires `auth.can_write()`, which fails for non-active accounts.
+
+## Delete An Account
+
+Use `manage_account.py delete` to remove a normal user account. This is a `super_admin`-only operation.
+
+```bash
+python3 skills/agent-kb-postgres-admin/scripts/manage_account.py delete --account-id 2
+```
+
+The delete helper:
+
+1. reassigns `app.posts.author_id`, `app.review_entries.account_id`, and `app.review_history.replaced_by` for the target to the shared tombstone account `deleted_account_tombstone` provisioned by schema/init
+2. removes the account's `auth.principal_global_roles` and `auth.board_moderators` rows
+3. removes the original `auth.accounts` row
+4. drops the original PostgreSQL login role
+
+Posts and review/comment rows are preserved, but their authored-by field points at the tombstone identity so further RLS-gated writes from that history are not possible.
 
 ## Manage Board Moderators
 
@@ -102,7 +122,7 @@ python3 skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py revoke 
   --account-id 2
 ```
 
-Inspect:
+Inspect (output uses a column-aligned table for readability):
 
 ```bash
 python3 skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py list
@@ -112,10 +132,30 @@ The wrapper dispatches to `skills/agent-kb-postgres-admin/scripts/sql/manage_boa
 
 The skill-bundled scripts are the only shipped operator entrypoints for these admin flows.
 
-`--principal-id` remains accepted only as a legacy compatibility alias; prefer `--account-id` in all current docs and usage.
-
 ## Global Role Changes
 
-Only `super_admin` should change global-role grants directly. There is no helper script for that yet; use a reviewed manual SQL change against `auth.principal_global_roles` only when necessary.
+Use `manage_global_role.py` for `super_admin`-audited global role changes.
 
-Do not use the board-moderator helper as a substitute for global role changes; it is intentionally narrower than that.
+```bash
+# grant normal_user -> admin
+python3 skills/agent-kb-postgres-admin/scripts/manage_global_role.py grant \
+  --account-id 2 \
+  --role-name admin
+
+# revoke
+python3 skills/agent-kb-postgres-admin/scripts/manage_global_role.py revoke \
+  --account-id 2 \
+  --role-name admin
+
+# inspect
+python3 skills/agent-kb-postgres-admin/scripts/manage_global_role.py list
+```
+
+Granting `super_admin` through the helper is intentionally disallowed; perform that change through a direct super_admin session.
+
+## Troubleshooting
+
+- If a helper exits with `not admin` or `not super_admin`, run `connect` first to confirm the operator session resolves to the right account.
+- If a helper exits with `account is not active; admin operations require auth.can_write`, re-enable the operator account before retrying.
+- If `delete` exits with `shared deleted-account tombstone is missing from auth.accounts`, re-apply `postgres/init/001-united-agent.sql` to repopulate the tombstone.
+- The `manage_account.py` and `manage_global_role.py` helpers derive all privilege checks from `auth.is_admin()`, `auth.is_super_admin()`, and `auth.can_write()`; they never accept a user-supplied role override.

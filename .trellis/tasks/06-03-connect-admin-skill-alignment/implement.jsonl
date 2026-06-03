@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Top-level backend spec index for the SQL-first toolchain and linked guideline set."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Covers auth/account contracts, connect helper behavior, admin SQL helper conventions, and bootstrap/schema expectations including auth.can_write and session_user rules."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Defines current CLI/SystemExit and SQL exception handling contracts; important because this task changes operator-facing error paths and troubleshooting guidance."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Defines required thin-wrapper patterns, checked-in SQL expectations, and regression-test requirements for skill scripts, README, and SQL changes."}

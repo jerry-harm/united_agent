@@ -12,6 +12,8 @@ class LiveCreatePrincipalDocumentationTest(unittest.TestCase):
         self.assertIn("tests/test_create_principal_live_flows.py", content)
         self.assertIn("python3 -m unittest tests.test_create_principal_live_flows -v", content)
         self.assertIn("create_principal.py", content)
+        self.assertIn("manage_account.py", content)
+        self.assertIn("manage_global_role.py", content)
 
 
 class LiveCreatePrincipalFlowTest(LivePostgresTestCase):
@@ -123,3 +125,130 @@ class LiveCreatePrincipalFlowTest(LivePostgresTestCase):
         )
         self.assertNotEqual(denied_result.returncode, 0)
         self.assertIn("only admin or super_admin may create accounts", denied_result.stderr)
+
+    def test_super_admin_can_grant_and_revoke_global_roles_via_script(self) -> None:
+        target_role = self.make_login_role("global_role_target")
+        target_password = f"pw_{self.suffix}_global_role_target"
+
+        create_target = self.run_create_principal(
+            actor_user="postgres",
+            actor_password="postgres",
+            display_name="Global Role Target",
+            global_role="normal_user",
+            login_role=target_role,
+            new_password=target_password,
+        )
+        self.assertEqual(create_target.returncode, 0, create_target.stderr)
+
+        account_id = self.fetch_account_id(target_role)
+
+        grant_result = self.run_manage_global_role(
+            "grant",
+            actor_user="postgres",
+            actor_password="postgres",
+            account_id=account_id,
+            role_name="admin",
+        )
+        self.assertEqual(grant_result.returncode, 0, grant_result.stderr)
+
+        is_admin, is_super_admin, can_write, _, status = self.fetch_role_flags(user=target_role, password=target_password)
+        self.assertTrue(is_admin)
+        self.assertFalse(is_super_admin)
+        self.assertTrue(can_write)
+        self.assertEqual(status, "active")
+
+        revoke_result = self.run_manage_global_role(
+            "revoke",
+            actor_user="postgres",
+            actor_password="postgres",
+            account_id=account_id,
+            role_name="admin",
+        )
+        self.assertEqual(revoke_result.returncode, 0, revoke_result.stderr)
+
+        is_admin, is_super_admin, can_write, _, status = self.fetch_role_flags(user=target_role, password=target_password)
+        self.assertFalse(is_admin)
+        self.assertFalse(is_super_admin)
+        self.assertTrue(can_write)
+        self.assertEqual(status, "active")
+
+    def test_manage_account_disable_then_delete_preserves_content_via_tombstone(self) -> None:
+        target_role = self.make_login_role("delete_target")
+        target_password = f"pw_{self.suffix}_delete_target"
+
+        create_target = self.run_create_principal(
+            actor_user="postgres",
+            actor_password="postgres",
+            display_name="Delete Target",
+            global_role="normal_user",
+            login_role=target_role,
+            new_password=target_password,
+        )
+        self.assertEqual(create_target.returncode, 0, create_target.stderr)
+
+        board_id = self.create_board(slug=self.make_board_slug("delete"), title="Delete Target Board")
+        post_id = self.create_post(
+            user=target_role,
+            password=target_password,
+            board_id=board_id,
+            title="Delete flow post",
+            body="delete flow body",
+        )
+        review_entry_id = self.create_review_entry(
+            user=target_role,
+            password=target_password,
+            post_id=post_id,
+            conclusion="delete flow review",
+        )
+        with self.connection_for(user=target_role, password=target_password) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE app.review_entries SET conclusion = %s WHERE id = %s",
+                    ("updated before delete", review_entry_id),
+                )
+            connection.commit()
+
+        account_id = self.fetch_account_id(target_role)
+        disable_result = self.run_manage_account(
+            "disable",
+            actor_user="postgres",
+            actor_password="postgres",
+            account_id=account_id,
+        )
+        self.assertEqual(disable_result.returncode, 0, disable_result.stderr)
+
+        with self.admin_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT account_status::text FROM auth.accounts WHERE id = %s", (account_id,))
+                self.assertEqual(cursor.fetchone()[0], "disabled")
+
+        delete_result = self.run_manage_account(
+            "delete",
+            actor_user="postgres",
+            actor_password="postgres",
+            account_id=account_id,
+        )
+        self.assertEqual(delete_result.returncode, 0, delete_result.stderr)
+
+        with self.admin_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT id FROM auth.accounts WHERE pg_login_role = 'deleted_account_tombstone'")
+                tombstone_account_id = cursor.fetchone()[0]
+
+                cursor.execute("SELECT author_id FROM app.posts WHERE id = %s", (post_id,))
+                self.assertEqual(cursor.fetchone()[0], tombstone_account_id)
+
+                cursor.execute("SELECT account_id FROM app.review_entries WHERE id = %s", (review_entry_id,))
+                self.assertEqual(cursor.fetchone()[0], tombstone_account_id)
+
+                cursor.execute(
+                    "SELECT replaced_by FROM app.review_history WHERE review_entry_id = %s ORDER BY id DESC LIMIT 1",
+                    (review_entry_id,),
+                )
+                self.assertEqual(cursor.fetchone()[0], tombstone_account_id)
+
+                cursor.execute("SELECT count(*) FROM auth.accounts WHERE id = %s", (account_id,))
+                self.assertEqual(cursor.fetchone()[0], 0)
+
+                cursor.execute("SELECT to_regrole(%s)", (target_role,))
+                self.assertIsNone(cursor.fetchone()[0])

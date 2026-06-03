@@ -26,7 +26,11 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("auth.principal_global_roles", content)
         self.assertIn("python3 skills/agent-kb-postgres-admin/scripts/create_principal.py", content)
         self.assertIn("python3 skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py assign", content)
+        self.assertIn("python3 skills/agent-kb-postgres-admin/scripts/manage_account.py disable", content)
+        self.assertIn("python3 skills/agent-kb-postgres-admin/scripts/manage_global_role.py grant", content)
         self.assertIn("skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql", content)
+        self.assertIn("run `connect` first", content)
+        self.assertIn("delete reassigns posts and review/comment rows to the shared tombstone account", content)
         self.assertIn("compatibility:", content)
         self.assertIn("psycopg", content)
         self.assertIn('pip install "psycopg[binary]"', content)
@@ -44,10 +48,14 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("skills/agent-kb-postgres-admin/SKILL.md", content)
         self.assertIn("skills/agent-kb-postgres-admin/scripts/create_principal.py", content)
         self.assertIn("skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py", content)
+        self.assertIn("skills/agent-kb-postgres-admin/scripts/manage_account.py", content)
+        self.assertIn("skills/agent-kb-postgres-admin/scripts/manage_global_role.py", content)
         self.assertIn("skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql", content)
         self.assertIn("auth.accounts", content)
         self.assertIn("auth.principal_global_roles", content)
         self.assertIn("auth.board_moderators", content)
+        self.assertIn("先运行 connect skill", content)
+        self.assertIn("共享 tombstone 账号", content)
         self.assertIn("AGENT_KB_DB_HOST", content)
         self.assertIn("AGENT_KB_DB_USER", content)
         self.assertIn("版主管理脚本只面向已有的 `normal_user` 账号", content)
@@ -81,13 +89,22 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertFalse((ROOT / "scripts/sql/manage_board_moderator_assign.sql").exists())
         self.assertFalse((ROOT / "scripts/sql/manage_board_moderator_revoke.sql").exists())
         self.assertFalse((ROOT / "scripts/sql/manage_board_moderator_list.sql").exists())
+        self.assertFalse((ROOT / "scripts/manage_account.py").exists())
+        self.assertFalse((ROOT / "scripts/manage_global_role.py").exists())
         self.assert_exists("skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py")
         self.assert_exists("skills/agent-kb-postgres-admin/scripts/create_principal.py")
         self.assert_exists("skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py")
+        self.assert_exists("skills/agent-kb-postgres-admin/scripts/manage_account.py")
+        self.assert_exists("skills/agent-kb-postgres-admin/scripts/manage_global_role.py")
         self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql")
         self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_assign.sql")
         self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_revoke.sql")
         self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_list.sql")
+        self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_account_disable.sql")
+        self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_account_delete.sql")
+        self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_global_role_grant.sql")
+        self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_global_role_revoke.sql")
+        self.assert_exists("skills/agent-kb-postgres-admin/scripts/sql/manage_global_role_list.sql")
 
     def test_common_python_helper_uses_env_defaults(self) -> None:
         content = self.read_text("skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py")
@@ -136,20 +153,44 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn('sql_file("scripts/sql/manage_board_moderator_list.sql")', content)
         self.assertIn("run_sql_file", content)
 
+    def test_manage_account_python_script_uses_sql_files(self) -> None:
+        content = self.read_text("skills/agent-kb-postgres-admin/scripts/manage_account.py")
+
+        self.assertIn('sql_file("scripts/sql/manage_account_disable.sql")', content)
+        self.assertIn('sql_file("scripts/sql/manage_account_delete.sql")', content)
+        self.assertIn("run_sql_file", content)
+
+    def test_manage_global_role_python_script_uses_sql_files(self) -> None:
+        content = self.read_text("skills/agent-kb-postgres-admin/scripts/manage_global_role.py")
+
+        self.assertIn('sql_file("scripts/sql/manage_global_role_grant.sql")', content)
+        self.assertIn('sql_file("scripts/sql/manage_global_role_revoke.sql")', content)
+        self.assertIn('sql_file("scripts/sql/manage_global_role_list.sql")', content)
+        self.assertIn("run_sql_file", content)
+
     def test_admin_skill_prefers_account_id_not_legacy_principal_id(self) -> None:
         content = self.read_text("skills/agent-kb-postgres-admin/SKILL.md")
+        script = self.read_text("skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py")
 
         self.assertIn("--account-id 2", content)
-        self.assertIn("legacy compatibility alias", content)
+        self.assertNotIn("--principal-id", content)
+        self.assertNotIn("--principal-id", script)
 
     def test_skill_local_python_scripts_use_skill_local_sql_files(self) -> None:
         create_principal = self.read_text("skills/agent-kb-postgres-admin/scripts/create_principal.py")
         manage_board_moderator = self.read_text("skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py")
+        manage_account = self.read_text("skills/agent-kb-postgres-admin/scripts/manage_account.py")
+        manage_global_role = self.read_text("skills/agent-kb-postgres-admin/scripts/manage_global_role.py")
 
         self.assertIn('sql_file("scripts/sql/create_principal.sql")', create_principal)
         self.assertIn('sql_file("scripts/sql/manage_board_moderator_assign.sql")', manage_board_moderator)
         self.assertIn('sql_file("scripts/sql/manage_board_moderator_revoke.sql")', manage_board_moderator)
         self.assertIn('sql_file("scripts/sql/manage_board_moderator_list.sql")', manage_board_moderator)
+        self.assertIn('sql_file("scripts/sql/manage_account_disable.sql")', manage_account)
+        self.assertIn('sql_file("scripts/sql/manage_account_delete.sql")', manage_account)
+        self.assertIn('sql_file("scripts/sql/manage_global_role_grant.sql")', manage_global_role)
+        self.assertIn('sql_file("scripts/sql/manage_global_role_revoke.sql")', manage_global_role)
+        self.assertIn('sql_file("scripts/sql/manage_global_role_list.sql")', manage_global_role)
 
     def test_board_moderator_sql_limits_actions_to_admin_levels(self) -> None:
         content = self.read_text("skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_assign.sql")
@@ -172,6 +213,38 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("DELETE FROM auth.board_moderators", revoke)
         self.assertIn("SELECT board_id, account_id, granted_at, granted_by", listing)
         self.assertIn("ORDER BY board_id, account_id", listing)
+
+    def test_manage_account_sql_supports_disable_and_delete_with_tombstone_reassignment(self) -> None:
+        disable_sql = self.read_text("skills/agent-kb-postgres-admin/scripts/sql/manage_account_disable.sql")
+        delete_sql = self.read_text("skills/agent-kb-postgres-admin/scripts/sql/manage_account_delete.sql")
+        schema_sql = self.read_text("postgres/init/001-united-agent.sql")
+
+        self.assertIn("auth.can_write()", disable_sql)
+        self.assertIn("auth.is_admin()", disable_sql)
+        self.assertIn("UPDATE auth.accounts", disable_sql)
+        self.assertIn("account_status = 'disabled'", disable_sql)
+        self.assertIn("auth.can_write()", delete_sql)
+        self.assertIn("auth.is_super_admin()", delete_sql)
+        self.assertIn("UPDATE app.posts", delete_sql)
+        self.assertIn("UPDATE app.review_entries", delete_sql)
+        self.assertIn("UPDATE app.review_history", delete_sql)
+        self.assertIn("DROP ROLE", delete_sql)
+        self.assertIn("DELETE FROM auth.accounts", delete_sql)
+        self.assertIn("deleted account tombstone", schema_sql)
+        self.assertIn("deleted_account_tombstone", schema_sql)
+
+    def test_manage_global_role_sql_supports_grant_revoke_and_list(self) -> None:
+        grant_sql = self.read_text("skills/agent-kb-postgres-admin/scripts/sql/manage_global_role_grant.sql")
+        revoke_sql = self.read_text("skills/agent-kb-postgres-admin/scripts/sql/manage_global_role_revoke.sql")
+        list_sql = self.read_text("skills/agent-kb-postgres-admin/scripts/sql/manage_global_role_list.sql")
+
+        self.assertIn("auth.can_write()", grant_sql)
+        self.assertIn("auth.is_super_admin()", grant_sql)
+        self.assertIn("INSERT INTO auth.principal_global_roles", grant_sql)
+        self.assertIn("auth.can_write()", revoke_sql)
+        self.assertIn("auth.is_super_admin()", revoke_sql)
+        self.assertIn("DELETE FROM auth.principal_global_roles", revoke_sql)
+        self.assertIn("SELECT account_id, role_name::text AS role_name", list_sql)
 
 
 if __name__ == "__main__":

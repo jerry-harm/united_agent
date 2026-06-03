@@ -17,6 +17,8 @@ except ModuleNotFoundError:  # pragma: no cover - environment-dependent
 ROOT = Path(__file__).resolve().parents[1]
 CREATE_PRINCIPAL_SCRIPT = ROOT / "skills/agent-kb-postgres-admin/scripts/create_principal.py"
 MANAGE_MODERATOR_SCRIPT = ROOT / "skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py"
+MANAGE_ACCOUNT_SCRIPT = ROOT / "skills/agent-kb-postgres-admin/scripts/manage_account.py"
+MANAGE_GLOBAL_ROLE_SCRIPT = ROOT / "skills/agent-kb-postgres-admin/scripts/manage_global_role.py"
 
 
 def live_db_env() -> dict[str, str]:
@@ -241,6 +243,46 @@ class LivePostgresTestCase(unittest.TestCase):
             args.extend(["--account-id", str(account_id)])
         return self.run_python_script(
             MANAGE_MODERATOR_SCRIPT,
+            args,
+            user=actor_user,
+            password=actor_password,
+            check=check,
+        )
+
+    def run_manage_account(
+        self,
+        action: str,
+        *,
+        actor_user: str,
+        actor_password: str,
+        account_id: int,
+        check: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
+        return self.run_python_script(
+            MANAGE_ACCOUNT_SCRIPT,
+            [action, "--account-id", str(account_id)],
+            user=actor_user,
+            password=actor_password,
+            check=check,
+        )
+
+    def run_manage_global_role(
+        self,
+        action: str,
+        *,
+        actor_user: str,
+        actor_password: str,
+        account_id: int | None = None,
+        role_name: str | None = None,
+        check: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
+        args = [action]
+        if account_id is not None:
+            args.extend(["--account-id", str(account_id)])
+        if role_name is not None:
+            args.extend(["--role-name", role_name])
+        return self.run_python_script(
+            MANAGE_GLOBAL_ROLE_SCRIPT,
             args,
             user=actor_user,
             password=actor_password,

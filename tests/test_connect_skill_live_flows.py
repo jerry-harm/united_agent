@@ -16,6 +16,8 @@ except ModuleNotFoundError:  # pragma: no cover - environment-dependent
 
 ROOT = Path(__file__).resolve().parents[1]
 VERIFY_CONNECTION_SCRIPT = ROOT / "skills/agent-kb-postgres-connect/scripts/verify_connection.py"
+VALIDATE_POST_FLOW_SCRIPT = ROOT / "skills/agent-kb-postgres-connect/scripts/validate_post_flow.py"
+VALIDATE_REVIEW_FLOW_SCRIPT = ROOT / "skills/agent-kb-postgres-connect/scripts/validate_review_flow.py"
 
 
 def live_db_env() -> dict[str, str]:
@@ -35,6 +37,8 @@ class LiveConnectSkillDocumentationTest(unittest.TestCase):
         self.assertIn("tests/test_connect_skill_live_flows.py", content)
         self.assertIn("python3 -m unittest tests.test_connect_skill_live_flows -v", content)
         self.assertIn("verify_connection.py", content)
+        self.assertIn("validate_post_flow.py", content)
+        self.assertIn("validate_review_flow.py", content)
 
 
 class LiveConnectSkillTest(unittest.TestCase):
@@ -101,6 +105,43 @@ class LiveConnectSkillTest(unittest.TestCase):
             capture_output=True,
             text=True,
         )
+
+    def create_board(self, *, slug: str, title: str) -> int:
+        with self.admin_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO app.boards (slug, title, description, board_type, created_by)
+                    VALUES (%s, %s, %s, 'discussion', auth.current_account_id())
+                    RETURNING id
+                    """,
+                    (slug, title, "connect skill validation board"),
+                )
+                board_id = cursor.fetchone()[0]
+            connection.commit()
+        return board_id
+
+    def create_post(self, *, user: str, password: str, board_id: int, title: str, body: str) -> int:
+        connection_factory = self.admin_connection if user == "postgres" and password == "postgres" else lambda: psycopg.connect(
+            host=self.env["AGENT_KB_DB_HOST"],
+            port=self.env["AGENT_KB_DB_PORT"],
+            dbname=self.env["AGENT_KB_DB_NAME"],
+            user=user,
+            password=password,
+        )
+        with connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO app.posts (board_id, author_id, content_type, title, body)
+                    VALUES (%s, auth.current_account_id(), %s, %s, %s)
+                    RETURNING id
+                    """,
+                    (board_id, "text/plain", title, body),
+                )
+                post_id = cursor.fetchone()[0]
+            connection.commit()
+        return post_id
 
     def run_connect_script(self, *, user: str, password: str, extra_env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         env = self.env | {
@@ -169,6 +210,47 @@ class LiveConnectSkillTest(unittest.TestCase):
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("is not active: disabled", result.stderr)
+
+    def test_validate_post_flow_script_reports_success_for_normal_user(self) -> None:
+        board_slug = f"connect-post-{uuid.uuid4().hex[:8]}"
+        login_role = f"connect_post_{uuid.uuid4().hex[:8]}"
+        password = f"pw_{uuid.uuid4().hex[:8]}"
+        self.create_principal(login_role=login_role, password=password, display_name="Connect Post User")
+        board_id = self.create_board(slug=board_slug, title="Connect Post Board")
+
+        result = subprocess.run(
+            ["python3", str(VALIDATE_POST_FLOW_SCRIPT), "--board-id", str(board_id)],
+            cwd=ROOT,
+            env=self.env | {"AGENT_KB_DB_USER": login_role, "AGENT_KB_DB_PASSWORD": password},
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("post flow ok", result.stdout)
+        self.assertIn("post created", result.stdout)
+
+    def test_validate_review_flow_script_reports_success_for_normal_user(self) -> None:
+        board_slug = f"connect-review-{uuid.uuid4().hex[:8]}"
+        login_role = f"connect_review_{uuid.uuid4().hex[:8]}"
+        password = f"pw_{uuid.uuid4().hex[:8]}"
+        self.create_principal(login_role=login_role, password=password, display_name="Connect Review User")
+        board_id = self.create_board(slug=board_slug, title="Connect Review Board")
+        post_id = self.create_post(user=login_role, password=password, board_id=board_id, title="Review target", body="body")
+
+        result = subprocess.run(
+            ["python3", str(VALIDATE_REVIEW_FLOW_SCRIPT), "--post-id", str(post_id)],
+            cwd=ROOT,
+            env=self.env | {"AGENT_KB_DB_USER": login_role, "AGENT_KB_DB_PASSWORD": password},
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("review flow ok", result.stdout)
+        self.assertIn("review entry created", result.stdout)
 
 
 if __name__ == "__main__":

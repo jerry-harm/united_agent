@@ -81,7 +81,7 @@ class LiveModeratorPermissionsFlowTest(LivePostgresTestCase):
             actor_password="postgres",
         )
         self.assertEqual(list_result.returncode, 0, list_result.stderr)
-        self.assertIn(f"{board_id}\t{moderator_account_id}", list_result.stdout)
+        self.assertIn(f"{board_id} | {moderator_account_id}", list_result.stdout)
 
         is_admin, is_super_admin, can_write, is_board_moderator, status = self.fetch_role_flags(
             user=moderator_role,
@@ -123,7 +123,7 @@ class LiveModeratorPermissionsFlowTest(LivePostgresTestCase):
             actor_password="postgres",
         )
         self.assertEqual(list_after_revoke.returncode, 0, list_after_revoke.stderr)
-        self.assertNotIn(f"{board_id}\t{moderator_account_id}", list_after_revoke.stdout)
+        self.assertNotIn(f"{board_id} | {moderator_account_id}", list_after_revoke.stdout)
 
         is_admin, is_super_admin, can_write, is_board_moderator, status = self.fetch_role_flags(
             user=moderator_role,
