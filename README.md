@@ -2,7 +2,7 @@
 
 `united_agent` 不是一个等待补齐前端和接口层的半成品后端，而是一个以 PostgreSQL 数据库本身为核心交付物的系统。它无 Web UI、无应用 API，部署只需要 PostgreSQL 数据库；数据库本身就是系统的交付物和部署单元。
 
-当前仓库交付的是：数据库 bootstrap、权限模型、轻量管理脚本、可分发 skills，以及保护这些契约的测试。
+当前仓库交付的是：数据库 bootstrap、权限模型、skill 自带的轻量管理脚本、可分发 skills，以及保护这些契约的测试。
 
 ## 系统定位
 
@@ -34,14 +34,12 @@
 
 ```text
 .
+├── pyproject.toml
 ├── docker-compose.yaml
 ├── postgres/
 │   ├── data/
 │   └── init/
 │       └── 001-united-agent.sql
-├── scripts/
-│   ├── create_principal.py
-│   └── manage_board_moderator.py
 ├── skills/
 │   ├── agent-kb-postgres-admin/
 │   │   ├── SKILL.md
@@ -50,9 +48,13 @@
 │   │       ├── manage_board_moderator.py
 │   │       └── sql/
 │   └── agent-kb-postgres-connect/
-│       └── SKILL.md
+│       ├── SKILL.md
+│       └── scripts/
+│           └── verify_connection.py
 ├── tests/
 │   ├── test_agent_kb_postgres_skeleton.py
+│   ├── test_connect_skill_live_flows.py
+│   ├── test_postgres_connect_tooling.py
 │   └── test_postgres_admin_tooling.py
 └── .trellis/
 ```
@@ -60,12 +62,13 @@
 关键路径：
 
 - `docker-compose.yaml`：当前支持的本地自托管入口
+- `pyproject.toml`：仓库根目录的 uv 依赖清单，只管理脚本/测试依赖，不把仓库声明成可发布 Python 包
 - `postgres/init/001-united-agent.sql`：schema、helper function、trigger、policy 与 bootstrap 账号
 - `skills/agent-kb-postgres-admin/scripts/create_principal.py`：skill 自带的账号创建入口，读取 `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql`
 - `skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py`：skill 自带的版主管理入口，读取对应 SQL 文件
-- `skills/agent-kb-postgres-connect/SKILL.md`：连接到运行中实例并验证账号映射
+- `skills/agent-kb-postgres-connect/SKILL.md`：普通用户连接与身份验证 skill
+- `skills/agent-kb-postgres-connect/scripts/verify_connection.py`：skill 自带的连接与身份验证入口
 - `skills/agent-kb-postgres-admin/SKILL.md`：执行特权账号和版主管理工作流
-- `scripts/`：仓库根部维护脚本入口，保留给数据库维护或人工调用
 - `tests/test_agent_kb_postgres_skeleton.py` 与 `tests/test_postgres_admin_tooling.py`：校验 schema、skills、README 与脚本契约
 - `tests/test_board_post_live_flows.py`：连接已运行中的本地 PostgreSQL，以直接 SQL 为主验证 board / post 的真实权限链路
 - `.trellis/`：任务与规范工作流文件
@@ -91,7 +94,14 @@ docker compose up -d
 
 ## 运行真实 board/post 集成测试
 
-如果你已经启动了本地 PostgreSQL / `docker compose` 环境，并安装了 `psycopg`：
+如果你已经启动了本地 PostgreSQL / `docker compose` 环境，仓库根目录现在自带 `pyproject.toml`，优先用 `uv` 安装并运行：
+
+```bash
+uv sync
+uv run python -m unittest tests.test_board_post_live_flows -v
+```
+
+不用 `uv` 时，再走手工安装 `psycopg`：
 
 ```bash
 pip install "psycopg[binary]"
@@ -106,6 +116,28 @@ python3 -m unittest tests.test_board_post_live_flows -v
 - `normal_user` 在未获版主授权前，通过直接 SQL 更新 `app.posts.verification` 会被数据库拒绝（可能表现为报错，也可能表现为 0 行更新）
 - 管理员只用来建立最小前置条件（例如创建测试登录账号），真正的权限结论以直接 SQL 对数据库的允许/拒绝结果为准
 
+## 运行真实 connect skill 集成测试
+
+如果你已经启动了本地 PostgreSQL / `docker compose` 环境，优先使用仓库根目录的 `uv` 依赖表：
+
+```bash
+uv sync
+uv run python -m unittest tests.test_connect_skill_live_flows -v
+```
+
+不用 `uv` 时也可以先安装再跑：
+
+```bash
+pip install "psycopg[binary]"
+python3 -m unittest tests.test_connect_skill_live_flows -v
+```
+
+这个测试会直接运行 `tests/test_connect_skill_live_flows.py`，并以 `skills/agent-kb-postgres-connect/scripts/verify_connection.py` 为真实入口覆盖：
+
+- 已映射且 active 的普通账号可以成功连接并输出身份信息
+- 只存在 PostgreSQL login、但没有 `auth.accounts` 映射时会明确失败
+- 已映射但 disabled 的账号会明确失败
+
 ## 连接与验证
 
 启动后，初始化 SQL 会创建 schema，并写入一个本地 bootstrap 账号：
@@ -114,7 +146,7 @@ python3 -m unittest tests.test_board_post_live_flows -v
 - 全局角色：`super_admin`
 - 显示名：`Local Postgres Bootstrap`
 
-验证 bootstrap 是否生效时，优先使用与当前 skills 一致的 Python + `psycopg` 路径：
+验证 bootstrap 是否生效时，如果你就在仓库根目录里操作，优先使用 `pyproject.toml` 里声明好的 `uv` + Python 路径：
 
 ```bash
 export AGENT_KB_DB_HOST=localhost
@@ -123,25 +155,17 @@ export AGENT_KB_DB_NAME=united_agent
 export AGENT_KB_DB_USER=postgres
 export AGENT_KB_DB_PASSWORD=postgres
 
-python3 - <<'PY'
-import os
-import psycopg
-
-with psycopg.connect(
-    host=os.environ["AGENT_KB_DB_HOST"],
-    port=os.environ.get("AGENT_KB_DB_PORT", "5432"),
-    dbname=os.environ.get("AGENT_KB_DB_NAME", "united_agent"),
-    user=os.environ["AGENT_KB_DB_USER"],
-    password=os.environ["AGENT_KB_DB_PASSWORD"],
-) as conn, conn.cursor() as cur:
-    cur.execute(
-        "SELECT current_user, session_user, auth.current_account_id(), auth.current_account_status();"
-    )
-    print(cur.fetchone())
-PY
+uv sync
+uv run python skills/agent-kb-postgres-connect/scripts/verify_connection.py
 ```
 
-当你以 `postgres` 连接时，这条查询应当解析到刚刚写入的 bootstrap 账号。
+不用 `uv` 时：
+
+```bash
+python3 skills/agent-kb-postgres-connect/scripts/verify_connection.py
+```
+
+当你以 `postgres` 连接时，这个脚本应当解析到刚刚写入的 bootstrap 账号，并输出 `connection ok`、`session_user=postgres`、账号状态等信息。
 
 ## 初始化后的 schema 关系图
 
@@ -230,9 +254,10 @@ erDiagram
 
 `skills/agent-kb-postgres-connect/SKILL.md` 主要覆盖：
 
-- 用 Python + `psycopg` 连接一个已经运行中的数据库
+- 用 skill 自带脚本通过 Python + `psycopg` 连接一个已经运行中的数据库
 - 验证现有凭据是否能解析到预期的 `auth.accounts` 身份
 - 检查 `current_user`、`session_user`、账号状态与登录映射是否一致
+- 在需要时用环境变量校验预期 login role / display name
 
 它不负责：
 
@@ -245,11 +270,22 @@ erDiagram
 
 如果需要创建账号或管理权限，请改用 `skills/agent-kb-postgres-admin/SKILL.md`。
 
-实际使用时，先自行启动数据库，再把 `SKILL.md` 文件加载到对应 agent 环境即可。
+实际使用时，先自行启动数据库，再把 `SKILL.md` 文件加载到对应 agent 环境即可。仓库内手工验证时，优先运行：
+
+```bash
+uv sync
+uv run python skills/agent-kb-postgres-connect/scripts/verify_connection.py
+```
+
+或：
+
+```bash
+python3 skills/agent-kb-postgres-connect/scripts/verify_connection.py
+```
 
 ## 账号创建与权限管理
 
-当前的账号创建与版主管理由 skill 自带的轻量 Python 入口负责，它们通过 `psycopg` 执行同目录下已签入的 SQL 文件，而不是把高权限 SQL 内联在 Python 字符串里。仓库根部 `scripts/` 仍可保留作人工维护入口，但不再是 skill 的默认依赖。
+当前的账号创建与版主管理由 skill 自带的轻量 Python 入口负责，它们通过 `psycopg` 执行同目录下已签入的 SQL 文件，而不是把高权限 SQL 内联在 Python 字符串里。skill-bundled 脚本现在就是唯一的已交付 operator 入口。
 
 ### 权限模型概览
 
@@ -278,7 +314,13 @@ export AGENT_KB_DB_USER=postgres
 export AGENT_KB_DB_PASSWORD=postgres
 ```
 
-先安装 Python 依赖：
+先安装 Python 依赖。仓库内优先：
+
+```bash
+uv sync
+```
+
+不用 `uv` 时：
 
 ```bash
 pip install "psycopg[binary]"

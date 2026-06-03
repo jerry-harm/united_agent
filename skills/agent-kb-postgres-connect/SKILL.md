@@ -10,11 +10,19 @@ compatibility:
 
 Use this skill for the ordinary-user connection and identity-verification path in the running PostgreSQL knowledge base.
 
-If you already have host, database, login role, and password, this skill shows the standard Python-first way to prove the credentials work and resolve to the expected account.
+If you already have host, database, login role, and password, this skill ships the standard Python-first way to prove the credentials work and resolve to the expected account.
 
 ## Dependencies
 
-This skill expects Python with `psycopg` installed.
+This skill expects Python with `psycopg` available.
+
+Preferred:
+
+```bash
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/verify_connection.py
+```
+
+Fallback if you are not using `uv`:
 
 ```bash
 pip install "psycopg[binary]"
@@ -53,67 +61,32 @@ Optional:
 - `AGENT_KB_EXPECTED_LOGIN_ROLE` if you want an explicit role-name check
 - `AGENT_KB_EXPECTED_DISPLAY_NAME` if you want an explicit account-name check
 
-## Verify A Normal Login With Python
+## Verify A Normal Login With The Bundled Script
 
 ```bash
-python3 - <<'PY'
-import os
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/verify_connection.py
+```
 
-import psycopg
+Fallback:
 
-expected_login_role = os.environ.get("AGENT_KB_EXPECTED_LOGIN_ROLE")
-expected_display_name = os.environ.get("AGENT_KB_EXPECTED_DISPLAY_NAME")
+```bash
+python3 skills/agent-kb-postgres-connect/scripts/verify_connection.py
+```
 
-conn = psycopg.connect(
-    host=os.environ["AGENT_KB_DB_HOST"],
-    port=os.environ.get("AGENT_KB_DB_PORT", "5432"),
-    dbname=os.environ.get("AGENT_KB_DB_NAME", "united_agent"),
-    user=os.environ["AGENT_KB_DB_USER"],
-    password=os.environ["AGENT_KB_DB_PASSWORD"],
-)
+The only shipped entrypoint lives at `skills/agent-kb-postgres-connect/scripts/verify_connection.py`.
 
-with conn, conn.cursor() as cur:
-    cur.execute(
-        """
-        SELECT
-            current_user,
-            session_user,
-            auth.current_account_id(),
-            auth.current_account_status(),
-            a.display_name,
-            a.pg_login_role
-        FROM auth.accounts AS a
-        WHERE a.id = auth.current_account_id();
-        """
-    )
-    row = cur.fetchone()
+Optional expected-value checks stay environment-driven:
 
-if row is None:
-    raise SystemExit("login resolved to no auth.accounts row")
+```bash
+export AGENT_KB_EXPECTED_LOGIN_ROLE=example_user
+export AGENT_KB_EXPECTED_DISPLAY_NAME="Example User"
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/verify_connection.py
+```
 
-current_user, session_user, account_id, account_status, display_name, pg_login_role = row
+Fallback:
 
-if account_status != "active":
-    raise SystemExit(f"account {account_id} is not active: {account_status}")
-
-if expected_login_role and pg_login_role != expected_login_role:
-    raise SystemExit(
-        f"expected pg_login_role={expected_login_role!r}, got {pg_login_role!r}"
-    )
-
-if expected_display_name and display_name != expected_display_name:
-    raise SystemExit(
-        f"expected display_name={expected_display_name!r}, got {display_name!r}"
-    )
-
-print("connection ok")
-print(f"current_user={current_user}")
-print(f"session_user={session_user}")
-print(f"account_id={account_id}")
-print(f"account_status={account_status}")
-print(f"display_name={display_name}")
-print(f"pg_login_role={pg_login_role}")
-PY
+```bash
+python3 skills/agent-kb-postgres-connect/scripts/verify_connection.py
 ```
 
 ## Minimum SQL Contract Being Verified
@@ -126,12 +99,22 @@ SELECT current_user, session_user, auth.current_account_id(), auth.current_accou
 
 The repository trusts `session_user` to map the live PostgreSQL login to the matching `auth.accounts` row.
 
-## What Success Looks Like
+## Script Output And Success Criteria
 
 - the connection succeeds with the provided credentials
 - `auth.current_account_id()` resolves to a real row in `auth.accounts`
 - `auth.current_account_status()` returns `active`
 - optional expected-value checks match the provided login role or display name
+
+Successful output includes:
+
+- `connection ok`
+- `current_user=...`
+- `session_user=...`
+- `account_id=...`
+- `account_status=active`
+- `display_name=...`
+- `pg_login_role=...`
 
 ## Troubleshooting Boundary
 
@@ -139,3 +122,5 @@ The repository trusts `session_user` to map the live PostgreSQL login to the mat
 - If the query runs but returns no row, the login exists in PostgreSQL but is not mapped the way this repository expects.
 - If the account is disabled, stop there; this skill does not override disabled-account policy.
 - If you discover the user lacks an account or needs a new role, hand off to `skills/agent-kb-postgres-admin/SKILL.md`.
+
+The bundled script is intentionally narrow: it verifies ordinary-user connectivity and identity mapping only.

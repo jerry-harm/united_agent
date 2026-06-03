@@ -1,0 +1,11 @@
+[project]
+name = "united-agent-repo"
+version = "0.0.0"
+description = "Repository-local Python dependencies for shipped PostgreSQL helper scripts and tests."
+requires-python = ">=3.11"
+dependencies = [
+  "psycopg[binary]",
+]
+
+[tool.uv]
+package = false
