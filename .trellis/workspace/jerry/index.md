@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 15
+- **Total Sessions**: 16
 - **Last Active**: 2026-06-03
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~514 | Active |
+| `journal-1.md` | ~547 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 16 | 2026-06-03 | Align connect/admin skill flows | `2ce400d` | `main` |
 | 15 | 2026-06-03 | 补齐数据库权限 live 测试 | `438e43a`, `0c18c4e` | `main` |
 | 14 | 2026-06-03 | Improve connect skill | `66126ac`, `76aaa35`, `11db5d7` | `main` |
 | 13 | 2026-06-03 | Bundle skill admin scripts | `516bb78`, `4adaf70` | `main` |

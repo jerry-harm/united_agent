@@ -512,3 +512,36 @@ Added themed live PostgreSQL permission test suites, documented the new test ent
 ### Next Steps
 
 - None - task complete
+
+
+## Session 16: Align connect/admin skill flows
+
+**Date**: 2026-06-03
+**Task**: Align connect/admin skill flows
+**Branch**: `main`
+
+### Summary
+
+Aligned postgres connect/admin skills, added ordinary-user/admin helper flows, updated init tombstone bootstrap, refreshed tests, and synced backend specs.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2ce400d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
