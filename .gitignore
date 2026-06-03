@@ -1,4 +1,4 @@
-postgres/data/db/
+postgres/data/
 !postgres/data/.gitkeep
 __pycache__/
 *.pyc
