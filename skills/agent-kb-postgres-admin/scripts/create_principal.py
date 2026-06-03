@@ -13,7 +13,7 @@ LOGIN_ROLE_RE = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--principal-type", required=True, choices=("human", "agent"))
+    parser.add_argument("--principal-type", default="agent", choices=("human", "agent"))
     parser.add_argument("--display-name", required=True)
     parser.add_argument("--global-role", required=True, choices=("normal_user", "admin"))
     parser.add_argument("--login-role", required=True)
