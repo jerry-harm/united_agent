@@ -910,3 +910,37 @@ Compress both SKILLs: connect 391→191 lines (-51%), admin 193→175 lines (-9%
 ### Next Steps
 
 - None - task complete
+
+
+## Session 28: Compress connect & admin SKILL.md; archive postgres-admin-skill-wording
+
+**Date**: 2026-06-03
+**Task**: Compress connect & admin SKILL.md; archive postgres-admin-skill-wording
+**Branch**: `main`
+
+### Summary
+
+Compress both SKILLs (connect 391→191, admin 193→175): remove inline SQL, simplify triggers to list, all-uv commands. Also archived postgres-admin-skill-wording task. 36/36 tests pass.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c46e5b3` | (see git log) |
+| `da17076` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
