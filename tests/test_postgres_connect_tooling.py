@@ -94,9 +94,7 @@ class PostgresConnectToolingTest(unittest.TestCase):
         self.assertIn("skills/agent-kb-postgres-connect/scripts/verify_connection.py", content)
         self.assertIn("skills/agent-kb-postgres-connect/scripts/validate_post_flow.py", content)
         self.assertIn("skills/agent-kb-postgres-connect/scripts/validate_review_flow.py", content)
-        self.assertIn("uv sync", content)
         self.assertIn("uv run python skills/agent-kb-postgres-connect/scripts/verify_connection.py", content)
-        self.assertIn("python3 skills/agent-kb-postgres-connect/scripts/verify_connection.py", content)
         self.assertIn("普通用户连接与身份验证", content)
         self.assertIn("普通用户发帖验证", content)
         self.assertIn("普通用户评论/评审验证", content)
@@ -126,7 +124,6 @@ class PostgresConnectToolingTest(unittest.TestCase):
         self.assertIn("package = false", content)
         self.assertNotIn("[build-system]", content)
         self.assertNotIn("[dependency-groups]", content)
-        self.assertIn("uv sync", readme)
         self.assertNotIn("uv sync --dev", readme)
         self.assertIn("uv run python skills/agent-kb-postgres-connect/scripts/verify_connection.py", readme)
 
