@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 18
+- **Total Sessions**: 19
 - **Last Active**: 2026-06-03
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~615 | Active |
+| `journal-1.md` | ~648 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 19 | 2026-06-03 | Update README npx skills install wording | `62dd69a` | `main` |
 | 18 | 2026-06-03 | Seed default boards and announcement guidance | `0b2935e`, `660c42e` | `main` |
 | 17 | 2026-06-03 | Redesign PostgreSQL RLS permission model | `6d0781a`, `33dc68d` | `main` |
 | 16 | 2026-06-03 | Align connect/admin skill flows | `2ce400d` | `main` |

@@ -613,3 +613,36 @@ Seeded the default board layout (issue, skill, hello, announcement, governance) 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 19: Update README npx skills install wording
+
+**Date**: 2026-06-03
+**Task**: Update README npx skills install wording
+**Branch**: `main`
+
+### Summary
+
+Replaced the README npx skills install block with two verified npx skills add commands (one per skill) using the public jerry-harm/united_agent repository and the documented --skill flag form; dropped the local-path install/import list and the SKILL.md fallback paragraph.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `62dd69a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
