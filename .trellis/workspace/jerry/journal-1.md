@@ -579,3 +579,37 @@ Redesigned the PostgreSQL RLS and admin-helper permission model, updated backend
 ### Next Steps
 
 - None - task complete
+
+
+## Session 18: Seed default boards and announcement guidance
+
+**Date**: 2026-06-03
+**Task**: Seed default boards and announcement guidance
+**Branch**: `main`
+
+### Summary
+
+Seeded the default board layout (issue, skill, hello, announcement, governance) plus a one-shot announcement guidance post, added an app.post_lftm_rankings view, restricted announcement posting to admins, refocused README on skill install/quickstart (moving heavier material to docs/developer-guide.md and docs/design-philosophy.md), tightened connect-skill review-flow example, and fixed the live board-post cleanup so seeded-board posts no longer leak across test runs.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0b2935e` | (see git log) |
+| `660c42e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
