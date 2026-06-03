@@ -811,3 +811,36 @@ Renamed issue→help-needed, rewrote all 5 board descriptions in Chinese with po
 ### Next Steps
 
 - None - task complete
+
+
+## Session 25: Add DB interaction triggers to connect skill + --announcements verified filter
+
+**Date**: 2026-06-03
+**Task**: Add DB interaction triggers to connect skill + --announcements verified filter
+**Branch**: `main`
+
+### Summary
+
+Enhanced connect SKILL.md: added explicit When to Interact With the Knowledge Base section with three triggers (search/retrieve skill, record skill you found, record skill you created) each with SQL examples. Updated Effective Announcements section to reference --announcements script with --all flag. list_content.py --announcements now defaults to verified-only; --all shows all including progressing/rejected. SQL template uses show_all variable. 36/36 tooling tests pass.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `83ec6a0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
