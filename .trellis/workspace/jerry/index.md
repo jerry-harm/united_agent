@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 20
+- **Total Sessions**: 21
 - **Last Active**: 2026-06-03
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~681 | Active |
+| `journal-1.md` | ~714 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 21 | 2026-06-03 | Fix quickstart to call list_content before validate_post_flow | `13ad5ce` | `main` |
 | 20 | 2026-06-03 | Add board listing and announcement viewing to connect skill | `4721f94` | `main` |
 | 19 | 2026-06-03 | Update README npx skills install wording | `62dd69a` | `main` |
 | 18 | 2026-06-03 | Seed default boards and announcement guidance | `0b2935e`, `660c42e` | `main` |

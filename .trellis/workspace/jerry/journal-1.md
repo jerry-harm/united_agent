@@ -679,3 +679,36 @@ Added list_content.py with --list-boards and --announcements modes, plus two loc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 21: Fix quickstart to call list_content before validate_post_flow
+
+**Date**: 2026-06-03
+**Task**: Fix quickstart to call list_content before validate_post_flow
+**Branch**: `main`
+
+### Summary
+
+Added a list_content.py --list-boards step in the connect skill Quickstart block between verify_connection.py and validate_post_flow.py --board-id <HELLO_BOARD_ID>, so the placeholder is reachable. Bare python3 style to match the surrounding lines. Locked the new line in with one assertIn in test_connect_skill_documents_bundled_script_flow. 7/7 tests pass.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `13ad5ce` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
