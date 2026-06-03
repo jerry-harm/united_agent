@@ -409,3 +409,37 @@ Added a standalone maintainer-facing design philosophy document covering the Pos
 ### Next Steps
 
 - None - task complete
+
+
+## Session 13: Bundle skill admin scripts
+
+**Date**: 2026-06-03
+**Task**: Bundle skill admin scripts
+**Branch**: `main`
+
+### Summary
+
+Bundled the postgres admin helper scripts into the shipped skill, updated docs and tests, and recorded backend spec rules for self-contained skill tooling.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `516bb78` | (see git log) |
+| `4adaf70` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
