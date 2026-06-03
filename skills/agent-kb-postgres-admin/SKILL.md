@@ -14,11 +14,7 @@ The helper scripts provide argument validation, SQL dispatch, and early failure 
 
 ## Dependencies
 
-This skill expects Python with `psycopg` installed.
-
-```bash
-pip install "psycopg[binary]"
-```
+This skill expects Python with `psycopg` available. Preferred: `uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/<entrypoint>`
 
 ## Bootstrap Environment Variables
 
@@ -60,7 +56,7 @@ Operators should run `connect` first and resolve the connect-level error before 
 For an admin creating a normal user:
 
 ```bash
-python3 skills/agent-kb-postgres-admin/scripts/create_principal.py \
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/create_principal.py \
   --principal-type human \
   --display-name "Example User" \
   --global-role normal_user \
@@ -70,7 +66,7 @@ python3 skills/agent-kb-postgres-admin/scripts/create_principal.py \
 For a super admin creating an admin:
 
 ```bash
-python3 skills/agent-kb-postgres-admin/scripts/create_principal.py \
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/create_principal.py \
   --principal-type human \
   --display-name "Example Admin" \
   --global-role admin \
@@ -84,7 +80,7 @@ Pass the new account password with `--new-password` or `AGENT_KB_NEW_PRINCIPAL_P
 Use `manage_account.py disable` to mark an existing account as `disabled`. The underlying PostgreSQL login role is preserved so existing credentials and authored history stay intact.
 
 ```bash
-python3 skills/agent-kb-postgres-admin/scripts/manage_account.py disable --account-id 2
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_account.py disable --account-id 2
 ```
 
 A disabled account stops being able to mutate state because every write path still requires `auth.can_write()`, which fails for non-active accounts.
@@ -94,7 +90,7 @@ A disabled account stops being able to mutate state because every write path sti
 Use `manage_account.py delete` to remove an account that the current actor is allowed to manage. In practice, `admin` may delete `normal_user`, while `super_admin` may also delete `admin`.
 
 ```bash
-python3 skills/agent-kb-postgres-admin/scripts/manage_account.py delete --account-id 2
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_account.py delete --account-id 2
 ```
 
 The delete helper:
@@ -111,7 +107,7 @@ Posts and review/comment rows are preserved, but their authored-by field points 
 Assign a moderator row to an existing `normal_user` account:
 
 ```bash
-python3 skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py assign \
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py assign \
   --board-id 1 \
   --account-id 2
 ```
@@ -119,15 +115,15 @@ python3 skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py assign 
 Revoke:
 
 ```bash
-python3 skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py revoke \
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py revoke \
   --board-id 1 \
   --account-id 2
 ```
 
-Inspect (output uses a column-aligned table for readability):
+Inspect:
 
 ```bash
-python3 skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py list
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py list
 ```
 
 The wrapper dispatches to `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_assign.sql`, `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_revoke.sql`, and `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_list.sql`. These SQL files are executed through `psycopg`; the wrapper handles argument validation and dispatch, while the shipped SQL plus live-session `auth` helpers enforce admin-level access and keep board-moderator assignment scoped to existing `normal_user` accounts under `auth.board_moderators`.
@@ -136,25 +132,11 @@ The skill-bundled scripts are the only shipped operator entrypoints for these ad
 
 ## Publish and Approve Announcements
 
-The `announcement` board is the canonical place for repo-wide guidance that AI agents should read. AI agents only consider announcements effective when `posts.verification = 'verified'`. `progressing` (default for fresh inserts) and `rejected` are treated as stale/invalid and ignored by AI.
+Announcements with `verification = 'verified'` are read by AI; `progressing` / `rejected` are ignored.
 
-To publish a new announcement:
+发布新公告：插入 `announcement` board（默认 `verification = 'progressing'`），然后通过 `scripts/sql/` 下的 SQL 将 `verification` 改为 `'verified'`。
 
-1. Insert the post in the `announcement` board (only `admin` / `super_admin` sessions can write there; insert with `verification = 'progressing'` is fine for the policy row, but the post will not be effective yet)
-2. Promote it to `verification = 'verified'` once reviewed:
-
-   ```sql
-   UPDATE app.posts
-   SET verification = 'verified'
-   WHERE id = <announcement_post_id>
-     AND board_id = (SELECT id FROM app.boards WHERE slug = 'announcement');
-   ```
-
-   The `posts_update_verification` RLS policy requires `auth.can_moderate_board(board_id)`, so the operator session must be `admin`, `super_admin`, or an explicit board moderator on the `announcement` board.
-
-3. To retire an announcement, set `verification = 'rejected'`. AI will then stop treating it as effective.
-
-The shipped "使用知识库前必读" announcement in the bootstrap is seeded as `'verified'`, so AI agents will read it on first use of the knowledge base. If you want a stricter gate, change that seed to `'progressing'` and approve it manually after reviewing.
+退役公告：设置 `verification = 'rejected'`。
 
 ## Cross-Board Improve Posts
 
@@ -170,17 +152,17 @@ Use `manage_global_role.py` for `super_admin`-audited global role changes.
 
 ```bash
 # grant normal_user -> admin
-python3 skills/agent-kb-postgres-admin/scripts/manage_global_role.py grant \
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_global_role.py grant \
   --account-id 2 \
   --role-name admin
 
 # revoke
-python3 skills/agent-kb-postgres-admin/scripts/manage_global_role.py revoke \
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_global_role.py revoke \
   --account-id 2 \
   --role-name admin
 
 # inspect
-python3 skills/agent-kb-postgres-admin/scripts/manage_global_role.py list
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_global_role.py list
 ```
 
 Granting `super_admin` through the helper is intentionally disallowed; perform that change through a direct super_admin session.
