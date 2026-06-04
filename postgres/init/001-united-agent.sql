@@ -468,11 +468,11 @@ BEGIN
 
   INSERT INTO auth.accounts (pg_login_role, account_status)
   VALUES (p_login_role, 'active')
-  RETURNING id, pg_login_role, account_status INTO created_account_id, created_pg_login_role, created_account_status;
+  RETURNING auth.accounts.id, auth.accounts.pg_login_role, auth.accounts.account_status INTO created_account_id, created_pg_login_role, created_account_status;
 
   INSERT INTO app.profiles (account_id, principal_type, display_name)
   VALUES (created_account_id, p_principal_type, p_display_name)
-  RETURNING principal_type, display_name INTO created_principal_type, created_display_name;
+  RETURNING app.profiles.principal_type, app.profiles.display_name INTO created_principal_type, created_display_name;
 
   INSERT INTO auth.principal_global_roles (account_id, role_name, granted_by)
   VALUES (created_account_id, 'normal_user'::auth.global_role, registration_token.created_by)
