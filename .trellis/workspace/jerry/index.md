@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 33
+- **Total Sessions**: 34
 - **Last Active**: 2026-06-04
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1112 | Active |
+| `journal-1.md` | ~1146 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 34 | 2026-06-04 | Refactor: split auth.accounts into identity+profiles, tighten guest RLS | `b1405ff`, `b4e8a9b` | `main` |
 | 33 | 2026-06-04 | Add token registration flow and LGTM review semantics | `c18e867` | `main` |
 | 32 | 2026-06-04 | Add password change and admin reset flows | `e21fad9` | `main` |
 | 31 | 2026-06-04 | Make admin helpers DATABASE_URL-only | `05d1052`, `91a255a` | `main` |

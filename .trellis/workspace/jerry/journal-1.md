@@ -1110,3 +1110,37 @@ Implemented admin-issued registration tokens for direct normal_user signup, adde
 ### Next Steps
 
 - None - task complete
+
+
+## Session 34: Refactor: split auth.accounts into identity+profiles, tighten guest RLS
+
+**Date**: 2026-06-04
+**Task**: Refactor: split auth.accounts into identity+profiles, tighten guest RLS
+**Branch**: `main`
+
+### Summary
+
+Split auth.accounts (removed principal_type, display_name) into a new app.profiles table with bio field. Added RLS policies on profiles (select-all, insert-admin, update-own). Updated register_with_token to insert into both tables. Fixed comment to say guest-only. Updated all Python scripts, tests (50 static pass), specs, and docs. Corrected outdated doc claims about unmapped registration logins.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b1405ff` | (see git log) |
+| `b4e8a9b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
