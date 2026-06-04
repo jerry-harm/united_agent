@@ -1144,3 +1144,37 @@ Split auth.accounts (removed principal_type, display_name) into a new app.profil
 ### Next Steps
 
 - None - task complete
+
+
+## Session 35: Simplify token registration: remove SHA-256, store raw token, fix RETURNING bug
+
+**Date**: 2026-06-04
+**Task**: Simplify token registration: remove SHA-256, store raw token, fix RETURNING bug
+**Branch**: `main`
+
+### Summary
+
+Fixed REGISTER_WITH_TOKEN RETURNING column ambiguity (PL/pgSQL variable shadowing). Removed SHA-256 hashing from registration flow: renamed token_hash->token, removed token_preview column, deleted hashlib from both Python scripts, updated all skill SQL helpers, tests, and docs. Token now stored as plaintext. psql can now directly call register_with_token('raw-token', ...).
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e373e88` | (see git log) |
+| `4fcba22` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
