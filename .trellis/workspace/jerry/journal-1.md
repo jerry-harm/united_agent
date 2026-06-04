@@ -1178,3 +1178,36 @@ Fixed REGISTER_WITH_TOKEN RETURNING column ambiguity (PL/pgSQL variable shadowin
 ### Next Steps
 
 - None - task complete
+
+
+## Session 36: Add psql connection hints to skill docs
+
+**Date**: 2026-06-04
+**Task**: Add psql connection hints to skill docs
+**Branch**: `main`
+
+### Summary
+
+Added brief psql connection hints to Connect SKILL.md and Admin SKILL.md. Connect's 'Writing SQL Directly' section now shows psql '' and a register_with_token() SQL example. Admin's Dependencies section notes psql as an alternative.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1a77133` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

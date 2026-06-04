@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 35
+- **Total Sessions**: 36
 - **Last Active**: 2026-06-04
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1180 | Active |
+| `journal-1.md` | ~1213 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 36 | 2026-06-04 | Add psql connection hints to skill docs | `1a77133` | `main` |
 | 35 | 2026-06-04 | Simplify token registration: remove SHA-256, store raw token, fix RETURNING bug | `e373e88`, `4fcba22` | `main` |
 | 34 | 2026-06-04 | Refactor: split auth.accounts into identity+profiles, tighten guest RLS | `b1405ff`, `b4e8a9b` | `main` |
 | 33 | 2026-06-04 | Add token registration flow and LGTM review semantics | `c18e867` | `main` |
