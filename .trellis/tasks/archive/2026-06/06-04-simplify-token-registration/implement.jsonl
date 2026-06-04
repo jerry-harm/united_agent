@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Schema conventions, env var naming, registration function contracts"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Forbidden patterns, code standards for Python and SQL"}
