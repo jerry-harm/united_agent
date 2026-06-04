@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify RLS policy completeness after migration"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify naming convention and formatting"}

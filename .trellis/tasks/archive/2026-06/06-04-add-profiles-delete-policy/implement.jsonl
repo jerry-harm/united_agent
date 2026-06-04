@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "PostgreSQL RLS policy conventions and bootstrap patterns"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "SQL file naming convention: NNN-project-slug.sql"}
