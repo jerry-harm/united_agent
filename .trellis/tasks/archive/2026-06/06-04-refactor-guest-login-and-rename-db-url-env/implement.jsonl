@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "RLS policies, schema bootstrap conventions, env var naming rules"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Forbidden patterns, code standards for Python and SQL"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Error handling conventions for Python scripts"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Logging conventions for Python scripts"}
+{"file": ".trellis/tasks/06-04-refactor-guest-login-and-rename-db-url-env/research/guest-rls-and-registration-audit.md", "reason": "Current state audit of guest RLS, registration flow, all affected files listed"}

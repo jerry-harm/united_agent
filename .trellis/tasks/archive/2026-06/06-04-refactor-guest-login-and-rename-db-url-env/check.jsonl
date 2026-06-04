@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify RLS policies correct, schema changes follow bootstrap conventions"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify no forbidden patterns, code standards met"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify error handling in updated Python scripts"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Verify logging in updated Python scripts"}
+{"file": ".trellis/tasks/06-04-refactor-guest-login-and-rename-db-url-env/research/guest-rls-and-registration-audit.md", "reason": "Cross-reference current state against refactored state, verify all affected files were updated"}
