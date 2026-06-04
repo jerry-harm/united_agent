@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import secrets
 
 from _postgres_admin_common import run_sql_file, sql_file
@@ -14,11 +13,8 @@ SQL_FILES = {
 }
 
 
-def build_token() -> tuple[str, str, str]:
-    token = secrets.token_urlsafe(24)
-    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
-    token_preview = f"{token[:8]}..."
-    return token, token_hash, token_preview
+def build_token() -> str:
+    return secrets.token_urlsafe(24)
 
 
 def parse_args() -> argparse.Namespace:
@@ -36,12 +32,11 @@ def main() -> int:
     if args.action == "create":
         if args.max_uses is None:
             raise SystemExit("--max-uses is required for create")
-        token, token_hash, token_preview = build_token()
+        token = build_token()
         run_sql_file(
             SQL_FILES[args.action],
             {
-                "token_hash": token_hash,
-                "token_preview": token_preview,
+                "token": token,
                 "max_uses": args.max_uses,
                 "expires_at": args.expires_at,
             },

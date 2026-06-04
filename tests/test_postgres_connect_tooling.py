@@ -81,7 +81,6 @@ class PostgresConnectToolingTest(unittest.TestCase):
         content = self.read_text("skills/agent-kb-postgres-connect/scripts/register_with_token.py")
 
         self.assertIn("from _postgres_connect_common import connect, load_secret_from_env_name", content)
-        self.assertIn("hashlib.sha256", content)
         self.assertIn("--token", content)
         self.assertIn("--display-name", content)
         self.assertIn("--login-role", content)

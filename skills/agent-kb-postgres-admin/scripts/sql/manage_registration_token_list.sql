@@ -6,6 +6,6 @@ BEGIN
 END
 $$;
 
-SELECT id, token_preview, max_uses, uses_consumed, expires_at, revoked_at, last_used_at, created_at, created_by
+SELECT id, token, max_uses, uses_consumed, expires_at, revoked_at, last_used_at, created_at, created_by
 FROM auth.registration_tokens
 ORDER BY created_at DESC, id DESC;

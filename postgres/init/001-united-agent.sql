@@ -58,8 +58,7 @@ CREATE TABLE auth.principal_global_roles (
 
 CREATE TABLE auth.registration_tokens (
   id bigserial PRIMARY KEY,
-  token_hash text NOT NULL UNIQUE CHECK (btrim(token_hash) <> ''),
-  token_preview text NOT NULL CHECK (btrim(token_preview) <> ''),
+  token text NOT NULL UNIQUE CHECK (btrim(token) <> ''),
   max_uses integer NOT NULL CHECK (max_uses > 0),
   uses_consumed integer NOT NULL DEFAULT 0 CHECK (uses_consumed >= 0 AND uses_consumed <= max_uses),
   expires_at timestamptz,
@@ -138,7 +137,7 @@ CREATE TABLE app.post_tags (
 
 -- 索引覆盖 RLS 与版主查询中的外键 / 授权热点路径。
 CREATE INDEX idx_principal_global_roles_role_name ON auth.principal_global_roles(role_name, account_id);
-CREATE INDEX idx_registration_tokens_active_lookup ON auth.registration_tokens(token_hash) WHERE revoked_at IS NULL;
+CREATE INDEX idx_registration_tokens_active_lookup ON auth.registration_tokens(token) WHERE revoked_at IS NULL;
 CREATE INDEX idx_board_moderators_account_id ON auth.board_moderators(account_id, board_id);
 CREATE INDEX idx_posts_board ON app.posts(board_id);
 CREATE INDEX idx_posts_improvement ON app.posts(improvement_of) WHERE improvement_of IS NOT NULL;
@@ -358,13 +357,12 @@ END;
 $$;
 
 CREATE FUNCTION auth.issue_registration_token(
-  p_token_hash text,
-  p_token_preview text,
+  p_token text,
   p_max_uses integer,
   p_expires_at timestamptz DEFAULT NULL
 ) RETURNS TABLE (
   id bigint,
-  token_preview text,
+  token text,
   max_uses integer,
   uses_consumed integer,
   expires_at timestamptz,
@@ -381,12 +379,8 @@ BEGIN
     RAISE EXCEPTION 'only admin or super_admin may create registration tokens';
   END IF;
 
-  IF coalesce(btrim(p_token_hash), '') = '' THEN
-    RAISE EXCEPTION 'registration token hash must not be empty';
-  END IF;
-
-  IF coalesce(btrim(p_token_preview), '') = '' THEN
-    RAISE EXCEPTION 'registration token preview must not be empty';
+  IF coalesce(btrim(p_token), '') = '' THEN
+    RAISE EXCEPTION 'registration token must not be empty';
   END IF;
 
   IF p_max_uses IS NULL OR p_max_uses <= 0 THEN
@@ -394,11 +388,11 @@ BEGIN
   END IF;
 
   RETURN QUERY
-  INSERT INTO auth.registration_tokens (token_hash, token_preview, max_uses, expires_at, created_by)
-  VALUES (p_token_hash, p_token_preview, p_max_uses, p_expires_at, auth.current_account_id())
+  INSERT INTO auth.registration_tokens (token, max_uses, expires_at, created_by)
+  VALUES (p_token, p_max_uses, p_expires_at, auth.current_account_id())
   RETURNING
     auth.registration_tokens.id,
-    auth.registration_tokens.token_preview,
+    auth.registration_tokens.token,
     auth.registration_tokens.max_uses,
     auth.registration_tokens.uses_consumed,
     auth.registration_tokens.expires_at,
@@ -409,7 +403,7 @@ END;
 $$;
 
 CREATE FUNCTION auth.register_with_token(
-  p_token_hash text,
+  p_token text,
   p_principal_type auth.principal_type,
   p_display_name text,
   p_login_role text,
@@ -439,13 +433,13 @@ BEGIN
     RAISE EXCEPTION 'registration via token is only allowed for the guest account';
   END IF;
 
-  IF coalesce(btrim(p_token_hash), '') = '' THEN
+  IF coalesce(btrim(p_token), '') = '' THEN
     RAISE EXCEPTION 'registration token must not be empty';
   END IF;
 
   SELECT * INTO registration_token
   FROM auth.registration_tokens
-  WHERE token_hash = p_token_hash
+  WHERE token = p_token
   FOR UPDATE;
 
   IF registration_token.id IS NULL THEN

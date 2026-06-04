@@ -149,7 +149,7 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
 
         for expected in (
             "CREATE TABLE auth.registration_tokens",
-            "token_hash text NOT NULL UNIQUE",
+            "token text NOT NULL UNIQUE",
             "max_uses integer NOT NULL",
             "uses_consumed integer NOT NULL DEFAULT 0",
             "expires_at timestamptz",

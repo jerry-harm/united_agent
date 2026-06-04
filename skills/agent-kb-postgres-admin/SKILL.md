@@ -115,7 +115,7 @@ Operational contract:
 
 - Only `admin` and `super_admin` may create registration tokens
 - the helper prints the raw token only at creation time; store it securely outside the repo
-- the database stores a token hash plus preview, not the full raw token
+- the database stores the raw token
 - token consumption is atomic, so concurrent reuse cannot create extra accounts beyond quota
 - registration tokens never create roles above `normal_user`
 - operators should instruct first-time registrants to connect as the built-in `guest` PostgreSQL login (password `guest`), which is the only account permitted to call `register_with_token`

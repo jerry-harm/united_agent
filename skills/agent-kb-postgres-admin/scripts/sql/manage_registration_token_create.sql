@@ -6,10 +6,9 @@ BEGIN
 END
 $$;
 
-SELECT id, token_preview, max_uses, uses_consumed, expires_at, revoked_at, created_at, created_by
+SELECT id, token, max_uses, uses_consumed, expires_at, revoked_at, created_at, created_by
 FROM auth.issue_registration_token(
-  {{token_hash}},
-  {{token_preview}},
+  {{token}},
   {{max_uses}}::integer,
   {{expires_at}}::timestamptz
 );

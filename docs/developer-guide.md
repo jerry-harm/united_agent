@@ -79,7 +79,7 @@ python3 skills/agent-kb-postgres-connect/scripts/validate_review_flow.py --post-
 
 `change_password.py` 只修改当前登录账号自己的 PostgreSQL 密码；MVP 不要求再次提供旧密码，但要求你显式传入 `--new-password-env <ENV_NAME>`，避免任何固定密码环境变量 fallback。
 
-`register_with_token.py` 用于 token 注册：调用方拿到管理员生成的 token 后，脚本会在客户端先做 SHA-256，再调用数据库里的注册 helper。这个路径不是公开注册；没有 token 就不能建号，而且无论 token 如何配置，最终只能创建 `normal_user`。
+`register_with_token.py` 用于 token 注册：调用方拿到管理员生成的 token 后，脚本直接调用数据库里的注册 helper。这个路径不是公开注册；没有 token 就不能建号，而且无论 token 如何配置，最终只能创建 `normal_user`。
 
 调用方应使用 KB 内置的 `guest` 账号（密码 `guest`）连接——它是 token 注册的唯一入口。`guest` 是映射到 `auth.accounts` 的只读账户，可读所有 `app.profiles` 和公开内容表。
 
@@ -229,7 +229,7 @@ erDiagram
     }
     AUTH_REGISTRATION_TOKENS {
         bigint id PK
-        text token_hash UK
+        text token UK
         integer max_uses
         integer uses_consumed
         timestamptz expires_at

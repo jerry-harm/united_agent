@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import sys
 from pathlib import Path
 
@@ -26,14 +25,13 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    token_hash = hashlib.sha256(args.token.encode("utf-8")).hexdigest()
     new_password = load_secret_from_env_name(args.new_password_env)
 
     with connect(args.url) as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 "SELECT id, principal_type, display_name, pg_login_role, account_status, remaining_uses FROM auth.register_with_token(%s, %s::auth.principal_type, %s, %s, %s)",
-                (token_hash, args.principal_type, args.display_name, args.login_role, new_password),
+                (args.token, args.principal_type, args.display_name, args.login_role, new_password),
             )
             account_id, principal_type, display_name, pg_login_role, account_status, remaining_uses = cursor.fetchone()
         connection.commit()

@@ -104,7 +104,7 @@ python skills/agent-kb-postgres-connect/scripts/verify_connection.py --url postg
 
 ### `register_with_token.py`
 
-Token-based registration. The helper hashes the token client-side, calls the shipped registration SQL function, and creates only a `normal_user` account. Only the `guest` PostgreSQL account may call this function.
+Token-based registration. The helper calls the shipped registration SQL function and creates only a `normal_user` account. Only the `guest` PostgreSQL account may call this function.
 
 ```bash
 python skills/agent-kb-postgres-connect/scripts/register_with_token.py \
