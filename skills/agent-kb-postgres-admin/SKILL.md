@@ -25,6 +25,12 @@ That means `create_principal.py` is **not** the way to create the first `super_a
 
 This skill expects Python with `psycopg` available. Preferred: `uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/<entrypoint>`
 
+You can also use `psql` to connect and execute SQL directly:
+
+```bash
+psql "$AGENT_KB_DATABASE_URL"
+```
+
 ## Runtime Secret Handling
 
 The calling operator/agent provides secrets at runtime. The scripts read them from `os.environ` and never write them to disk.
