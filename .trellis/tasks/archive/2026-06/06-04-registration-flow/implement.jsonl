@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Load the backend spec index and follow the pre-development backend guidance for this PostgreSQL-first task."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Registration tokens, account creation boundaries, review terminology, seeded announcement updates, and helper authorization all change database contracts."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Implementation must keep privileged logic in checked-in SQL, keep Python wrappers thin, and update shipped docs/tests with the behavior change."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "The new token registration flow needs operator-facing validation and SQL policy errors that match the repo's current error-handling contract."}

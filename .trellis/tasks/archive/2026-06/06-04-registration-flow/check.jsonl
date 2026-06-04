@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Review needs the backend spec index as the top-level contract for this task."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Check schema, helper authorization, seeded announcement behavior, review history semantics, and terminology changes against the documented database contract."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify SQL-first implementation style, shipped-skill/doc alignment, and required regression coverage."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Check that CLI validation and SQL error messages stay explicit and aligned with existing repo patterns."}
