@@ -1211,3 +1211,34 @@ Added brief psql connection hints to Connect SKILL.md and Admin SKILL.md. Connec
 ### Next Steps
 
 - None - task complete
+
+
+## Session 37: Diagnose & revert: profiles FK CASCADE not blocked by FORCE RLS
+
+**Date**: 2026-06-04
+**Task**: Diagnose & revert: profiles FK CASCADE not blocked by FORCE RLS
+**Branch**: `main`
+
+### Summary
+
+Investigated whether app.profiles FORCE ROW LEVEL SECURITY blocked FK CASCADE during account deletion in delete_managed_account(). Created 002-add-profiles-delete-policy.sql migration, updated 001-united-agent.sql, then realized SECURITY DEFINER (superuser-owned) bypasses FORCE RLS entirely. Reverted all changes — no code fixes needed. Also discussed skill optional dependencies, migration engineering practices, and RLS INSERT policy with_check mechanics.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
