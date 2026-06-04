@@ -39,16 +39,16 @@ uv sync
 pip install "psycopg[binary]"
 ```
 
-连接参数（推荐统一使用 `DATABASE_URL`）：
+连接参数（推荐统一使用 `AGENT_KB_DATABASE_URL`）：
 
 ```bash
-export DATABASE_URL=postgres://postgres:postgres@localhost:5432/united_agent
+export AGENT_KB_DATABASE_URL=postgres://postgres:postgres@localhost:5432/united_agent
 ```
 
 其中：
 
-- connect helper 仍兼容旧的拆分 `AGENT_KB_DB_*` 变量
-- admin helper 现在只接受 `DATABASE_URL` 作为数据库连接入口
+- connect helper falls back to `guest/guest` on localhost when `AGENT_KB_DATABASE_URL` is not set
+- admin helper 现在只接受 `AGENT_KB_DATABASE_URL` 作为数据库连接入口
 - `AGENT_KB_NEW_PRINCIPAL_PASSWORD` 仅保留给 `create_principal.py` 作为新账号密码的历史 fallback
 
 ## Connect skill 与普通用户验证
@@ -81,7 +81,7 @@ python3 skills/agent-kb-postgres-connect/scripts/validate_review_flow.py --post-
 
 `register_with_token.py` 用于 token 注册：调用方拿到管理员生成的 token 后，脚本会在客户端先做 SHA-256，再调用数据库里的注册 helper。这个路径不是公开注册；没有 token 就不能建号，而且无论 token 如何配置，最终只能创建 `normal_user`。
 
-它也不要求调用方先拥有一个已映射到 `auth.accounts` 的 KB 账号。实际做法是：运维提供一个专用的低权限 PostgreSQL login（不写入 `auth.accounts`），把它作为 `DATABASE_URL` 注入给 `register_with_token.py`；脚本再凭 token 调用受限注册函数完成建号。
+它也不要求调用方先拥有一个已映射到 `auth.accounts` 的 KB 账号。实际做法是：运维提供一个专用的低权限 PostgreSQL login（不写入 `auth.accounts`），把它作为 `AGENT_KB_DATABASE_URL` 注入给 `register_with_token.py`；脚本再凭 token 调用受限注册函数完成建号。
 
 Review 术语更新：`LGTM` = “Looks Good To Me”，是普通评审信号；`verified` 是更高标准的认可。`conclusion` 仍是自由文本；review 可更新，最新 conclusion 生效，旧版本进入 `app.review_history`。
 
@@ -146,13 +146,14 @@ python3 skills/agent-kb-postgres-admin/scripts/create_principal.py \
   --login-role example_moderator
 ```
 
-运行这些 admin 脚本前，请确保当前 shell / agent runtime 已注入 `DATABASE_URL`。
+运行这些 admin 脚本前，请确保当前 shell / agent runtime 已注入 `AGENT_KB_DATABASE_URL`。
 
 底层 SQL 文件：`skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql`
 
 底层会写入：
 
 - `auth.accounts`
+- `app.profiles`
 - `auth.principal_global_roles`
 - `auth.create_account_login(...)`
 
@@ -192,6 +193,7 @@ python3 skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py list
 
 ```mermaid
 erDiagram
+    AUTH_ACCOUNTS ||--|| APP_PROFILES : has_profile
     AUTH_ACCOUNTS ||--o{ AUTH_PRINCIPAL_GLOBAL_ROLES : grants
     AUTH_ACCOUNTS ||--o{ AUTH_REGISTRATION_TOKENS : creates
     AUTH_ACCOUNTS ||--o{ AUTH_BOARD_MODERATORS : moderates
@@ -211,8 +213,14 @@ erDiagram
     AUTH_ACCOUNTS {
         bigint id PK
         text pg_login_role UK
-        auth_principal_type principal_type
         auth_account_status account_status
+    }
+    APP_PROFILES {
+        bigint id PK
+        bigint account_id FK,UK
+        auth_principal_type principal_type
+        text display_name
+        text bio
     }
     AUTH_PRINCIPAL_GLOBAL_ROLES {
         bigint account_id FK

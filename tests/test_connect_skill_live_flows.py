@@ -22,11 +22,21 @@ VALIDATE_REVIEW_FLOW_SCRIPT = ROOT / "skills/agent-kb-postgres-connect/scripts/v
 
 def live_db_env() -> dict[str, str]:
     env = os.environ.copy()
-    env.setdefault("AGENT_KB_DB_HOST", "localhost")
-    env.setdefault("AGENT_KB_DB_PORT", "5432")
-    env.setdefault("AGENT_KB_DB_NAME", "united_agent")
-    env.setdefault("AGENT_KB_DB_USER", "postgres")
-    env.setdefault("AGENT_KB_DB_PASSWORD", "postgres")
+    if env.get("AGENT_KB_DATABASE_URL"):
+        from urllib.parse import urlsplit
+
+        u = urlsplit(env["AGENT_KB_DATABASE_URL"])
+        env["AGENT_KB_DB_HOST"] = u.hostname or "localhost"
+        env["AGENT_KB_DB_PORT"] = str(u.port or 5432)
+        env["AGENT_KB_DB_NAME"] = u.path.lstrip("/") or "united_agent"
+        env["AGENT_KB_DB_USER"] = u.username or "postgres"
+        env["AGENT_KB_DB_PASSWORD"] = u.password or "postgres"
+    else:
+        env.setdefault("AGENT_KB_DB_HOST", "localhost")
+        env.setdefault("AGENT_KB_DB_PORT", "5432")
+        env.setdefault("AGENT_KB_DB_NAME", "united_agent")
+        env.setdefault("AGENT_KB_DB_USER", "postgres")
+        env.setdefault("AGENT_KB_DB_PASSWORD", "postgres")
     return env
 
 
@@ -145,10 +155,8 @@ class LiveConnectSkillTest(unittest.TestCase):
         return post_id
 
     def run_connect_script(self, *, user: str, password: str, extra_env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-        env = self.env | {
-            "AGENT_KB_DB_USER": user,
-            "AGENT_KB_DB_PASSWORD": password,
-        }
+        db_url = f"postgres://{user}:{password}@{self.env['AGENT_KB_DB_HOST']}:{self.env['AGENT_KB_DB_PORT']}/{self.env['AGENT_KB_DB_NAME']}"
+        env = self.env | {"AGENT_KB_DATABASE_URL": db_url}
         if extra_env:
             env.update(extra_env)
         return subprocess.run(
@@ -170,10 +178,6 @@ class LiveConnectSkillTest(unittest.TestCase):
         result = self.run_connect_script(
             user=self.login_role,
             password=self.password,
-            extra_env={
-                "AGENT_KB_EXPECTED_LOGIN_ROLE": self.login_role,
-                "AGENT_KB_EXPECTED_DISPLAY_NAME": "Connect Flow User",
-            },
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -227,7 +231,7 @@ class LiveConnectSkillTest(unittest.TestCase):
         result = subprocess.run(
             ["python3", str(VALIDATE_POST_FLOW_SCRIPT), "--board-id", str(board_id)],
             cwd=ROOT,
-            env=self.env | {"AGENT_KB_DB_USER": login_role, "AGENT_KB_DB_PASSWORD": password},
+            env=self.env | {"AGENT_KB_DATABASE_URL": f"postgres://{login_role}:{password}@{self.env['AGENT_KB_DB_HOST']}:{self.env['AGENT_KB_DB_PORT']}/{self.env['AGENT_KB_DB_NAME']}"},
             check=False,
             capture_output=True,
             text=True,
@@ -248,7 +252,7 @@ class LiveConnectSkillTest(unittest.TestCase):
         result = subprocess.run(
             ["python3", str(VALIDATE_REVIEW_FLOW_SCRIPT), "--post-id", str(post_id)],
             cwd=ROOT,
-            env=self.env | {"AGENT_KB_DB_USER": login_role, "AGENT_KB_DB_PASSWORD": password},
+            env=self.env | {"AGENT_KB_DATABASE_URL": f"postgres://{login_role}:{password}@{self.env['AGENT_KB_DB_HOST']}:{self.env['AGENT_KB_DB_PORT']}/{self.env['AGENT_KB_DB_NAME']}"},
             check=False,
             capture_output=True,
             text=True,

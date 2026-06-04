@@ -19,6 +19,7 @@ SUCCESS_MARKER = "review flow ok"
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--url", default=None, help="Database connection URL (reads AGENT_KB_DATABASE_URL env var if not given)")
     parser.add_argument("--post-id", type=int, required=True)
     parser.add_argument("--conclusion", default="hello from connect skill")
     return parser.parse_args()
@@ -27,7 +28,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
 
-    with connect() as connection:
+    with connect(args.url) as connection:
         with connection.cursor() as cursor:
             cursor.execute("SELECT auth.current_account_id(), auth.can_write()")
             account_id, can_write = cursor.fetchone()

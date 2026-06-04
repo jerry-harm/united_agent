@@ -13,7 +13,7 @@
 无论你是普通用户还是管理员，都遵循同一条规则：
 
 - 由调用方在**运行时**提供凭据
-- 文档默认以 `DATABASE_URL` 作为连接表达方式
+- 文档默认以 `AGENT_KB_DATABASE_URL` 作为连接表达方式
 - 新账号密码也只应在运行时注入，或作为一次性命令参数传入
 - 现有账号改密/重置密码时，必须显式传入 `--new-password-env <ENV_NAME>` 这类参数
 - 不要把数据库密码、新账号密码写进仓库文件
@@ -35,23 +35,19 @@ npx skills add jerry-harm/united_agent/skills --skill agent-kb-postgres-admin
 
 ### 2. 在运行时提供连接凭据
 
-推荐做法：由你自己的 agent tool 在运行时注入 `DATABASE_URL`。
+推荐做法：由你自己的 agent tool 在运行时注入 `AGENT_KB_DATABASE_URL`。
 
 ```bash
-export DATABASE_URL=postgres://postgres:postgres@localhost:5432/united_agent
+export AGENT_KB_DATABASE_URL=postgres://postgres:postgres@localhost:5432/united_agent
 ```
-
-兼容性说明：底层 helper 仍接受旧的拆分环境变量，但这只是兼容路径，不是本文推荐路径。
 
 ### 3. 如果还没有账号，先走 token 注册
 
-`skills/agent-kb-postgres-connect/scripts/register_with_token.py` 提供 token 注册。它不是公开注册入口；只有拿到管理员创建的 token 才能注册，并且新账号只会是 `normal_user`。
-
-这个脚本不要求你先有一个已映射到 `auth.accounts` 的 KB 账号；它可以通过一个**未映射到 `auth.accounts` 的低权限 PostgreSQL login** 来调用受限注册函数。换句话说：需要数据库连接凭据，但不需要现有 KB 账号身份。
+`skills/agent-kb-postgres-connect/scripts/register_with_token.py` 提供 token 注册。只有拿到管理员创建的 token 才能注册，新账号会是 `normal_user`。先用 `AGENT_KB_DATABASE_URL` 设置 guest 凭据（guest 是 KB 内置的只读账户，专门用于 token 注册），然后运行注册脚本。
 
 ```bash
+export AGENT_KB_DATABASE_URL=postgres://guest:guest@<HOST>:5432/united_agent
 export AGENT_KB_NEW_PASSWORD='replace-me'
-export DATABASE_URL=postgres://registration_guest:replace-me@localhost:5432/united_agent
 uv run python skills/agent-kb-postgres-connect/scripts/register_with_token.py \
   --token <REGISTRATION_TOKEN> \
   --display-name "Example User" \
@@ -128,7 +124,7 @@ npx skills add jerry-harm/united_agent/skills --skill agent-kb-postgres-admin
 ### 4. 用 bootstrap 身份先验证连接
 
 ```bash
-export DATABASE_URL=postgres://postgres:postgres@localhost:5432/united_agent
+export AGENT_KB_DATABASE_URL=postgres://postgres:postgres@localhost:5432/united_agent
 uv run python skills/agent-kb-postgres-connect/scripts/verify_connection.py
 ```
 

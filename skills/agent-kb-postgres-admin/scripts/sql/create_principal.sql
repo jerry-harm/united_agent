@@ -14,9 +14,9 @@ END
 $$;
 
 WITH created_account AS (
-  INSERT INTO auth.accounts (principal_type, display_name, pg_login_role, account_status)
-  VALUES ({{principal_type}}, {{display_name}}, {{login_role}}, 'active')
-  RETURNING id, principal_type, display_name, pg_login_role, account_status
+  INSERT INTO auth.accounts (pg_login_role, account_status)
+  VALUES ({{login_role}}, 'active')
+  RETURNING id, pg_login_role, account_status
 ),
 created_login AS (
   SELECT auth.create_account_login(
@@ -24,11 +24,17 @@ created_login AS (
     {{new_password}}
   )
 ),
+created_profile AS (
+  INSERT INTO app.profiles (account_id, principal_type, display_name)
+  SELECT created_account.id, {{principal_type}}, {{display_name}}
+  FROM created_account, created_login
+  RETURNING principal_type, display_name
+),
 granted_role AS (
   INSERT INTO auth.principal_global_roles (account_id, role_name, granted_by)
   SELECT created_account.id, {{global_role}}, auth.current_account_id()
   FROM created_account, created_login
   ON CONFLICT (account_id, role_name) DO NOTHING
 )
-SELECT id, principal_type, display_name, pg_login_role, account_status
-FROM created_account;
+SELECT created_account.id, created_profile.principal_type, created_profile.display_name, created_account.pg_login_role, created_account.account_status
+FROM created_account, created_profile;

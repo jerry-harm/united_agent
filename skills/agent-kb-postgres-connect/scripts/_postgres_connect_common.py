@@ -14,9 +14,10 @@ SELECT
     session_user,
     auth.current_account_id(),
     auth.current_account_status(),
-    a.display_name,
+    p.display_name,
     a.pg_login_role
 FROM auth.accounts AS a
+LEFT JOIN app.profiles AS p ON p.account_id = a.id
 WHERE a.id = auth.current_account_id();
 """
 
@@ -35,9 +36,9 @@ def load_secret_from_env_name(env_name: str) -> str:
     return require_env(name)
 
 
-def db_env() -> dict[str, str]:
-    if os.environ.get("DATABASE_URL"):
-        u = urlsplit(os.environ["DATABASE_URL"])
+def db_env(url_from_flag: str | None = None) -> dict[str, str]:
+    if url_from_flag:
+        u = urlsplit(url_from_flag)
         return {
             "host": u.hostname or "",
             "user": u.username or "",
@@ -45,17 +46,20 @@ def db_env() -> dict[str, str]:
             "port": str(u.port or 5432),
             "name": u.path.lstrip("/") or "",
         }
-    return {
-        "host": require_env("AGENT_KB_DB_HOST"),
-        "user": require_env("AGENT_KB_DB_USER"),
-        "password": require_env("AGENT_KB_DB_PASSWORD"),
-        "port": os.environ.get("AGENT_KB_DB_PORT", "5432"),
-        "name": os.environ.get("AGENT_KB_DB_NAME", "united_agent"),
-    }
+    if os.environ.get("AGENT_KB_DATABASE_URL"):
+        u = urlsplit(os.environ["AGENT_KB_DATABASE_URL"])
+        return {
+            "host": u.hostname or "",
+            "user": u.username or "",
+            "password": u.password or "",
+            "port": str(u.port or 5432),
+            "name": u.path.lstrip("/") or "",
+        }
+    raise SystemExit("database URL is required (set AGENT_KB_DATABASE_URL or use --url)")
 
 
-def connect() -> psycopg.Connection:
-    env = db_env()
+def connect(url_from_flag: str | None = None) -> psycopg.Connection:
+    env = db_env(url_from_flag)
     return psycopg.connect(
         host=env["host"],
         port=env["port"],

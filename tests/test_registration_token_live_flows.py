@@ -68,7 +68,7 @@ class RegistrationTokenLiveFlowTest(LivePostgresTestCase):
         display_name: str,
     ) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
-        env["DATABASE_URL"] = f"postgres://{db_user}:{db_password}@localhost:5432/united_agent"
+        env["AGENT_KB_DATABASE_URL"] = f"postgres://{db_user}:{db_password}@localhost:5432/united_agent"
         env["AGENT_KB_NEW_PASSWORD"] = password
         return subprocess.run(
             [

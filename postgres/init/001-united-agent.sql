@@ -28,12 +28,21 @@ CREATE TYPE app.board_type AS ENUM ('discussion', 'announcement');
 CREATE TYPE app.verification_state AS ENUM ('progressing', 'verified', 'rejected');
 
 -- 身份与授权表都在 auth schema。
+-- auth.accounts 只存内部身份字段（pg_login_role + account_status），公开资料字段（principal_type, display_name, bio）放在 app.profiles。
 CREATE TABLE auth.accounts (
   id bigserial PRIMARY KEY,
-  principal_type auth.principal_type NOT NULL,
-  display_name text NOT NULL CHECK (btrim(display_name) <> ''),
   pg_login_role text NOT NULL UNIQUE CHECK (btrim(pg_login_role) <> ''),
   account_status auth.account_status NOT NULL DEFAULT 'active',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE app.profiles (
+  id bigserial PRIMARY KEY,
+  account_id bigint NOT NULL UNIQUE REFERENCES auth.accounts(id) ON DELETE CASCADE,
+  principal_type auth.principal_type NOT NULL,
+  display_name text NOT NULL CHECK (btrim(display_name) <> ''),
+  bio text NOT NULL DEFAULT '',
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -204,6 +213,20 @@ SECURITY DEFINER
 SET search_path = auth, pg_catalog
 AS $$
   SELECT auth.has_global_role('super_admin');
+$$;
+
+CREATE FUNCTION auth.is_guest() RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = auth, pg_catalog
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM auth.accounts AS a
+    WHERE a.pg_login_role = session_user
+      AND a.pg_login_role = 'guest'
+  );
 $$;
 
 -- 版主身份按 board 判定，便于在不发全局 admin 的前提下委托帖子的 verification 写操作。
@@ -401,13 +424,21 @@ CREATE FUNCTION auth.register_with_token(
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = auth, pg_catalog
+SET search_path = auth, app, pg_catalog
 AS $$
 DECLARE
   registration_token auth.registration_tokens%ROWTYPE;
-  created_account auth.accounts%ROWTYPE;
+  created_account_id bigint;
+  created_pg_login_role text;
+  created_account_status auth.account_status;
+  created_principal_type auth.principal_type;
+  created_display_name text;
   remaining integer;
 BEGIN
+  IF NOT auth.is_guest() THEN
+    RAISE EXCEPTION 'registration via token is only allowed for the guest account';
+  END IF;
+
   IF coalesce(btrim(p_token_hash), '') = '' THEN
     RAISE EXCEPTION 'registration token must not be empty';
   END IF;
@@ -435,12 +466,16 @@ BEGIN
 
   PERFORM auth.create_account_login_unchecked(p_login_role, p_password);
 
-  INSERT INTO auth.accounts (principal_type, display_name, pg_login_role, account_status)
-  VALUES (p_principal_type, p_display_name, p_login_role, 'active')
-  RETURNING * INTO created_account;
+  INSERT INTO auth.accounts (pg_login_role, account_status)
+  VALUES (p_login_role, 'active')
+  RETURNING id, pg_login_role, account_status INTO created_account_id, created_pg_login_role, created_account_status;
+
+  INSERT INTO app.profiles (account_id, principal_type, display_name)
+  VALUES (created_account_id, p_principal_type, p_display_name)
+  RETURNING principal_type, display_name INTO created_principal_type, created_display_name;
 
   INSERT INTO auth.principal_global_roles (account_id, role_name, granted_by)
-  VALUES (created_account.id, 'normal_user'::auth.global_role, registration_token.created_by)
+  VALUES (created_account_id, 'normal_user'::auth.global_role, registration_token.created_by)
   ON CONFLICT (account_id, role_name) DO NOTHING;
 
   UPDATE auth.registration_tokens
@@ -455,11 +490,11 @@ BEGIN
   END IF;
 
   RETURN QUERY
-  SELECT created_account.id,
-         created_account.principal_type,
-         created_account.display_name,
-         created_account.pg_login_role,
-         created_account.account_status,
+  SELECT created_account_id,
+         created_principal_type,
+         created_display_name,
+         created_pg_login_role,
+         created_account_status,
          remaining;
 EXCEPTION
   WHEN others THEN
@@ -653,6 +688,11 @@ BEFORE UPDATE ON auth.accounts
 FOR EACH ROW
 EXECUTE FUNCTION auth.set_updated_at();
 
+CREATE TRIGGER trg_profiles_updated_at
+BEFORE UPDATE ON app.profiles
+FOR EACH ROW
+EXECUTE FUNCTION auth.set_updated_at();
+
 CREATE TRIGGER trg_review_entries_updated_at
 BEFORE UPDATE ON app.review_entries
 FOR EACH ROW
@@ -747,6 +787,8 @@ ALTER TABLE app.review_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.review_history FORCE ROW LEVEL SECURITY;
 ALTER TABLE app.tags ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.tags FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app.profiles FORCE ROW LEVEL SECURITY;
 ALTER TABLE app.post_tags ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.post_tags FORCE ROW LEVEL SECURITY;
 
@@ -755,18 +797,32 @@ CREATE POLICY accounts_select_self_or_admin ON auth.accounts
   FOR SELECT TO united_agent_user
   USING (id = auth.current_account_id() OR auth.is_admin());
 
-CREATE POLICY accounts_update_admin ON auth.accounts
-  FOR UPDATE TO united_agent_user
-  USING (auth.can_manage_account(id))
-  WITH CHECK (auth.can_manage_account(id));
+-- 公开资料表：所有人可读（含 guest），author 可更新自己的 profile，admin 可插入（注册 / 建号流程）。
+CREATE POLICY profiles_select_all ON app.profiles
+  FOR SELECT TO united_agent_user
+  USING (true);
 
-CREATE POLICY accounts_insert_admin ON auth.accounts
+CREATE POLICY profiles_insert_admin ON app.profiles
   FOR INSERT TO united_agent_user
   WITH CHECK (auth.can_write() AND auth.is_admin());
 
+CREATE POLICY profiles_update_own ON app.profiles
+  FOR UPDATE TO united_agent_user
+  USING (auth.can_write() AND account_id = auth.current_account_id())
+  WITH CHECK (auth.can_write() AND account_id = auth.current_account_id());
+
+CREATE POLICY accounts_update_admin ON auth.accounts
+  FOR UPDATE TO united_agent_user
+  USING (auth.can_manage_account(id) AND NOT auth.is_guest())
+  WITH CHECK (auth.can_manage_account(id) AND NOT auth.is_guest());
+
+CREATE POLICY accounts_insert_admin ON auth.accounts
+  FOR INSERT TO united_agent_user
+  WITH CHECK (auth.can_write() AND auth.is_admin() AND NOT auth.is_guest());
+
 CREATE POLICY accounts_delete_admin ON auth.accounts
   FOR DELETE TO united_agent_user
-  USING (auth.can_manage_account(id));
+  USING (auth.can_manage_account(id) AND NOT auth.is_guest());
 
 CREATE POLICY principal_global_roles_select_self_or_admin ON auth.principal_global_roles
   FOR SELECT TO united_agent_user
@@ -782,6 +838,7 @@ CREATE POLICY principal_global_roles_insert_admin_normal_user ON auth.principal_
   FOR INSERT TO united_agent_user
   WITH CHECK (
     auth.can_write()
+    AND NOT auth.is_guest()
     AND (
       auth.is_super_admin()
       OR (
@@ -828,6 +885,7 @@ CREATE POLICY posts_insert_authenticated ON app.posts
   FOR INSERT TO united_agent_user
   WITH CHECK (
     auth.can_write()
+    AND NOT auth.is_guest()
     AND author_id = auth.current_account_id()
     AND verification = 'progressing'
     AND (
@@ -857,12 +915,12 @@ CREATE POLICY review_entries_select_all ON app.review_entries
 
 CREATE POLICY review_entries_insert_own ON app.review_entries
   FOR INSERT TO united_agent_user
-  WITH CHECK (auth.can_write() AND account_id = auth.current_account_id());
+  WITH CHECK (auth.can_write() AND NOT auth.is_guest() AND account_id = auth.current_account_id());
 
 CREATE POLICY review_entries_update_own ON app.review_entries
   FOR UPDATE TO united_agent_user
-  USING (auth.can_write() AND account_id = auth.current_account_id())
-  WITH CHECK (auth.can_write() AND account_id = auth.current_account_id());
+  USING (auth.can_write() AND NOT auth.is_guest() AND account_id = auth.current_account_id())
+  WITH CHECK (auth.can_write() AND NOT auth.is_guest() AND account_id = auth.current_account_id());
 
 CREATE POLICY review_entries_delete_moderator_or_admin ON app.review_entries
   FOR DELETE TO united_agent_user
@@ -973,9 +1031,15 @@ CREATE POLICY registration_tokens_update_admin ON auth.registration_tokens
   WITH CHECK (auth.can_write() AND auth.is_admin());
 
 -- 把本地 bootstrap 的 postgres 登录写入应用账号模型，开发环境自带一个 super_admin 身份。
-INSERT INTO auth.accounts (principal_type, display_name, pg_login_role, account_status)
-VALUES ('human', 'Local Postgres Bootstrap', 'postgres', 'active')
+INSERT INTO auth.accounts (pg_login_role, account_status)
+VALUES ('postgres', 'active')
 ON CONFLICT (pg_login_role) DO NOTHING;
+
+INSERT INTO app.profiles (account_id, principal_type, display_name)
+SELECT id, 'human', 'Local Postgres Bootstrap'
+FROM auth.accounts
+WHERE pg_login_role = 'postgres'
+ON CONFLICT (account_id) DO NOTHING;
 
 INSERT INTO auth.principal_global_roles (account_id, role_name, granted_by)
 SELECT id, 'super_admin', id
@@ -1029,11 +1093,47 @@ BEGIN
 END
 $$;
 
-INSERT INTO auth.accounts (principal_type, display_name, pg_login_role, account_status)
-VALUES ('agent', 'Deleted Account Tombstone', 'deleted_account_tombstone', 'disabled')
+INSERT INTO auth.accounts (pg_login_role, account_status)
+VALUES ('deleted_account_tombstone', 'disabled')
 ON CONFLICT (pg_login_role) DO NOTHING;
 
--- token 注册入口允许未映射到 auth.accounts 的低权限 PostgreSQL login 调用；真正的建号边界仍由 token 本身控制。
+INSERT INTO app.profiles (account_id, principal_type, display_name)
+SELECT id, 'agent', 'Deleted Account Tombstone'
+FROM auth.accounts
+WHERE pg_login_role = 'deleted_account_tombstone'
+ON CONFLICT (account_id) DO NOTHING;
+
+-- Guest 账户：用于匿名 token 注册。guest 是 normal_user，继承读权限，但写操作被 RLS 拦掉。
+-- guest 必须能被 register_with_token 的 SECURITY DEFINER 调用，所以是 LOGIN 账号。
+DO $$
+BEGIN
+  IF to_regrole('guest') IS NULL THEN
+    CREATE ROLE guest LOGIN PASSWORD 'guest';
+  END IF;
+END
+$$;
+
+GRANT united_agent_user TO guest;
+
+INSERT INTO auth.accounts (pg_login_role, account_status)
+VALUES ('guest', 'active')
+ON CONFLICT (pg_login_role) DO NOTHING;
+
+INSERT INTO app.profiles (account_id, principal_type, display_name)
+SELECT id, 'agent', 'Guest'
+FROM auth.accounts
+WHERE pg_login_role = 'guest'
+ON CONFLICT (account_id) DO NOTHING;
+
+INSERT INTO auth.principal_global_roles (account_id, role_name, granted_by)
+SELECT id, 'normal_user', id
+FROM auth.accounts
+WHERE pg_login_role = 'guest'
+ON CONFLICT (account_id, role_name) DO NOTHING;
+
+-- token 注册入口仅 guest 账号可调用；register_with_token 内部已加 is_guest() 检查。
 GRANT EXECUTE ON FUNCTION auth.register_with_token(text, auth.principal_type, text, text, text) TO PUBLIC;
+
+-- Guest 通过 united_agent_user 继承已持有所有读写 GRANT；RLS 负责拦掉 guest 写操作（NOT auth.is_guest()），所以无需额外显式 guest GRANT。
 
 COMMIT;

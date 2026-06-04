@@ -43,6 +43,7 @@ def list_announcements(connection: psycopg.Connection, show_all: bool = False) -
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="List boards or view announcement board content.")
+    parser.add_argument("--url", default=None, help="Database connection URL (reads AGENT_KB_DATABASE_URL env var if not given)")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--list-boards", action="store_true", help="List all accessible boards")
     group.add_argument("--announcements", action="store_true", help="View posts in the announcement board (defaults to verified-only)")
@@ -55,7 +56,7 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        with connect() as connection:
+        with connect(args.url) as connection:
             if args.list_boards:
                 list_boards(connection)
             elif args.announcements:

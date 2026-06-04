@@ -65,7 +65,7 @@ If you need to add observability before a server exists, prefer small operator-f
 
 Never print or log:
 
-- database passwords from `AGENT_KB_DB_PASSWORD`
+- database passwords from connection strings or `--new-password` flags
 - new account passwords from `--new-password` or `AGENT_KB_NEW_PRINCIPAL_PASSWORD`
 - fully rendered SQL when it would expose secrets
 - unrelated environment dumps

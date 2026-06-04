@@ -70,11 +70,11 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("create the first `super_admin`", content)
         self.assertIn("os.environ", content)
         self.assertIn("do not edit shipped skill files to store secrets", content)
-        self.assertIn("typically as `DATABASE_URL`", content)
-        self.assertIn("Admin connection contract: shipped admin helpers require `DATABASE_URL`", content)
+        self.assertIn("typically as `AGENT_KB_DATABASE_URL`", content)
+        self.assertIn("Admin connection contract: shipped admin helpers require `AGENT_KB_DATABASE_URL`", content)
         self.assertIn("prefer explicit env-variable-name flags such as `--new-password-env`", content)
         self.assertIn("AGENT_KB_NEW_PRINCIPAL_PASSWORD", content)
-        self.assertIn("The database connection itself still comes from `DATABASE_URL`", content)
+        self.assertIn("The database connection itself still comes from `AGENT_KB_DATABASE_URL`", content)
         self.assertIn("No fixed password env fallback exists for reset-password", content)
         self.assertIn("Only `admin` and `super_admin` may create registration tokens", content)
         self.assertIn("token-based direct registration", content)
@@ -125,6 +125,7 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("```mermaid", content)
         self.assertIn("erDiagram", content)
         self.assertIn("AUTH_ACCOUNTS", content)
+        self.assertIn("APP_PROFILES", content)
         self.assertIn("AUTH_PRINCIPAL_GLOBAL_ROLES", content)
         self.assertIn("AUTH_BOARD_MODERATORS", content)
         self.assertIn("APP_BOARDS", content)
@@ -141,8 +142,8 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("auth.principal_global_roles", content)
         self.assertIn("auth.board_moderators", content)
         self.assertIn("共享 tombstone 账号", content)
-        self.assertIn("DATABASE_URL", content)
-        self.assertIn("admin helper 现在只接受 `DATABASE_URL`", content)
+        self.assertIn("AGENT_KB_DATABASE_URL", content)
+        self.assertIn("admin helper 现在只接受 `AGENT_KB_DATABASE_URL`", content)
         self.assertIn("版主管理脚本只面向已有的 `normal_user` 账号", content)
         self.assertIn("而不是来自用户在命令行上传入的角色参数", content)
         self.assertIn("psycopg", content)
@@ -181,7 +182,7 @@ class PostgresAdminToolingTest(unittest.TestCase):
     def test_common_python_helper_uses_database_url(self) -> None:
         content = self.read_text("skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py")
 
-        self.assertIn('require_env("DATABASE_URL")', content)
+        self.assertIn('require_env("AGENT_KB_DATABASE_URL")', content)
         self.assertIn("psycopg.connect(database_url())", content)
         self.assertIn("import psycopg", content)
         self.assertIn("cursor.execute", content)
@@ -198,13 +199,13 @@ class PostgresAdminToolingTest(unittest.TestCase):
 
         self.assertEqual(
             str(context.exception),
-            "missing required environment variable: DATABASE_URL",
+            "missing required environment variable: AGENT_KB_DATABASE_URL",
         )
 
     def test_open_connection_uses_database_url_conninfo(self) -> None:
         module = self.load_admin_common_module()
 
-        with patch.dict(os.environ, {"DATABASE_URL": "postgres://example"}, clear=True):
+        with patch.dict(os.environ, {"AGENT_KB_DATABASE_URL": "postgres://example"}, clear=True):
             with patch.object(module.psycopg, "connect") as connect:
                 module.open_connection()
 

@@ -26,7 +26,7 @@ def load_secret_from_env_name(env_name: str) -> str:
 
 
 def database_url() -> str:
-    return require_env("DATABASE_URL")
+    return require_env("AGENT_KB_DATABASE_URL")
 
 
 def sql_file(relative_path: str) -> Path:

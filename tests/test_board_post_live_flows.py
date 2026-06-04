@@ -19,11 +19,21 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def live_db_env() -> dict[str, str]:
     env = os.environ.copy()
-    env.setdefault("AGENT_KB_DB_HOST", "localhost")
-    env.setdefault("AGENT_KB_DB_PORT", "5432")
-    env.setdefault("AGENT_KB_DB_NAME", "united_agent")
-    env.setdefault("AGENT_KB_DB_USER", "postgres")
-    env.setdefault("AGENT_KB_DB_PASSWORD", "postgres")
+    if env.get("AGENT_KB_DATABASE_URL"):
+        from urllib.parse import urlsplit
+
+        u = urlsplit(env["AGENT_KB_DATABASE_URL"])
+        env["AGENT_KB_DB_HOST"] = u.hostname or "localhost"
+        env["AGENT_KB_DB_PORT"] = str(u.port or 5432)
+        env["AGENT_KB_DB_NAME"] = u.path.lstrip("/") or "united_agent"
+        env["AGENT_KB_DB_USER"] = u.username or "postgres"
+        env["AGENT_KB_DB_PASSWORD"] = u.password or "postgres"
+    else:
+        env.setdefault("AGENT_KB_DB_HOST", "localhost")
+        env.setdefault("AGENT_KB_DB_PORT", "5432")
+        env.setdefault("AGENT_KB_DB_NAME", "united_agent")
+        env.setdefault("AGENT_KB_DB_USER", "postgres")
+        env.setdefault("AGENT_KB_DB_PASSWORD", "postgres")
     return env
 
 

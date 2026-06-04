@@ -8,6 +8,7 @@ from _postgres_connect_common import connect, load_secret_from_env_name
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--url", default=None, help="Database connection URL (reads AGENT_KB_DATABASE_URL env var if not given)")
     parser.add_argument("--new-password-env", required=True)
     return parser.parse_args()
 
@@ -16,7 +17,7 @@ def main() -> int:
     args = parse_args()
     new_password = load_secret_from_env_name(args.new_password_env)
     try:
-        with connect() as connection:
+        with connect(args.url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute("SELECT auth.change_own_password(%s)", (new_password,))
                 changed_role = cursor.fetchone()[0]

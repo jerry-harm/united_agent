@@ -31,6 +31,7 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             "CREATE TYPE app.board_type AS ENUM ('discussion', 'announcement')",
             "CREATE TYPE app.verification_state AS ENUM ('progressing', 'verified', 'rejected')",
             "CREATE TABLE auth.accounts",
+            "CREATE TABLE app.profiles",
             "CREATE TABLE auth.principal_global_roles",
             "CREATE TABLE auth.board_moderators",
             "CREATE TABLE app.boards",
@@ -48,6 +49,8 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
         for expected in (
             "ALTER TABLE auth.accounts ENABLE ROW LEVEL SECURITY",
             "ALTER TABLE auth.accounts FORCE ROW LEVEL SECURITY",
+            "ALTER TABLE app.profiles ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE app.profiles FORCE ROW LEVEL SECURITY",
             "ALTER TABLE app.posts ENABLE ROW LEVEL SECURITY",
             "ALTER TABLE app.review_history ENABLE ROW LEVEL SECURITY",
             "ALTER TABLE app.posts FORCE ROW LEVEL SECURITY",
@@ -86,8 +89,8 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             "WITH CHECK (auth.can_write() AND auth.is_super_admin())",
             "USING (auth.can_moderate_board(board_id))",
             "WITH CHECK (auth.can_moderate_board(board_id))",
-            "USING (auth.can_write() AND account_id = auth.current_account_id())",
-            "USING (auth.can_manage_account(id))",
+            "USING (auth.can_write() AND NOT auth.is_guest() AND account_id = auth.current_account_id())",
+            "USING (auth.can_manage_account(id) AND NOT auth.is_guest())",
             "auth.can_moderate_board((SELECT p.board_id",
         ):
             self.assertIn(expected, content)
@@ -156,6 +159,7 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             "FOR UPDATE",
             "uses_consumed < max_uses",
             "INSERT INTO auth.principal_global_roles",
+            "INSERT INTO app.profiles",
             "'normal_user'::auth.global_role",
             "GRANT USAGE ON SCHEMA auth TO PUBLIC;",
             "GRANT EXECUTE ON FUNCTION auth.register_with_token",
@@ -163,6 +167,28 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             "EXECUTE format('DROP ROLE %I', p_login_role);",
         ):
             self.assertIn(expected, content)
+
+    def test_schema_defines_profiles_table_and_rls(self) -> None:
+        content = self.read_text("postgres/init/001-united-agent.sql")
+
+        for expected in (
+            "CREATE TABLE app.profiles",
+            "account_id bigint NOT NULL UNIQUE REFERENCES auth.accounts(id) ON DELETE CASCADE",
+            "principal_type auth.principal_type NOT NULL",
+            "display_name text NOT NULL CHECK (btrim(display_name) <> '')",
+            "bio text NOT NULL DEFAULT ''",
+            "CREATE POLICY profiles_select_all ON app.profiles",
+            "CREATE POLICY profiles_insert_admin ON app.profiles",
+            "CREATE POLICY profiles_update_own ON app.profiles",
+            "TRIGGER trg_profiles_updated_at",
+        ):
+            self.assertIn(expected, content)
+
+    def test_guest_no_longer_has_explicit_schema_level_grants(self) -> None:
+        content = self.read_text("postgres/init/001-united-agent.sql")
+
+        self.assertNotIn("GRANT SELECT ON ALL TABLES IN SCHEMA app TO guest", content)
+        self.assertNotIn("GRANT SELECT ON ALL TABLES IN SCHEMA auth TO guest", content)
 
     def test_seeded_announcement_body_is_one_valid_sql_expression(self) -> None:
         content = self.read_text("postgres/init/001-united-agent.sql")
@@ -187,20 +213,19 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
         self.assertIn("name: agent-kb-postgres-connect", content)
         self.assertIn("compatibility:", content)
         self.assertIn("psycopg", content)
-        self.assertIn('uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/verify_connection.py', content)
+        self.assertIn('python skills/agent-kb-postgres-connect/scripts/verify_connection.py', content)
         self.assertIn('pip install "psycopg[binary]"', content)
         self.assertIn("ordinary-user connection and identity-verification path", content)
         self.assertIn("This skill does not:", content)
         self.assertIn("create accounts", content)
         self.assertIn("grant or revoke roles", content)
-        self.assertIn('uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/verify_connection.py', content)
-        self.assertIn('uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/list_content.py --list-boards', content)
-        self.assertIn('uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/validate_post_flow.py', content)
-        self.assertIn('uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/validate_review_flow.py', content)
+        self.assertIn('python skills/agent-kb-postgres-connect/scripts/verify_connection.py', content)
+        self.assertIn('python skills/agent-kb-postgres-connect/scripts/list_content.py --list-boards', content)
+        self.assertIn('python skills/agent-kb-postgres-connect/scripts/validate_post_flow.py', content)
+        self.assertIn('python skills/agent-kb-postgres-connect/scripts/validate_review_flow.py', content)
         self.assertIn("skills/agent-kb-postgres-connect/scripts/verify_connection.py", content)
         self.assertIn("connection ok", content)
-        self.assertIn("AGENT_KB_DB_HOST", content)
-        self.assertIn("AGENT_KB_EXPECTED_LOGIN_ROLE", content)
+        self.assertIn("AGENT_KB_DATABASE_URL", content)
         self.assertIn("auth.accounts", content)
         self.assertIn("united_agent", content)
         self.assertIn("hello board", content)

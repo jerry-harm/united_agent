@@ -23,13 +23,23 @@ MANAGE_GLOBAL_ROLE_SCRIPT = ROOT / "skills/agent-kb-postgres-admin/scripts/manag
 
 def live_db_env() -> dict[str, str]:
     env = os.environ.copy()
-    env.setdefault("AGENT_KB_DB_HOST", "localhost")
-    env.setdefault("AGENT_KB_DB_PORT", "5432")
-    env.setdefault("AGENT_KB_DB_NAME", "united_agent")
-    env.setdefault("AGENT_KB_DB_USER", "postgres")
-    env.setdefault("AGENT_KB_DB_PASSWORD", "postgres")
+    if env.get("AGENT_KB_DATABASE_URL"):
+        from urllib.parse import urlsplit
+
+        u = urlsplit(env["AGENT_KB_DATABASE_URL"])
+        env["AGENT_KB_DB_HOST"] = u.hostname or "localhost"
+        env["AGENT_KB_DB_PORT"] = str(u.port or 5432)
+        env["AGENT_KB_DB_NAME"] = u.path.lstrip("/") or "united_agent"
+        env["AGENT_KB_DB_USER"] = u.username or "postgres"
+        env["AGENT_KB_DB_PASSWORD"] = u.password or "postgres"
+    else:
+        env.setdefault("AGENT_KB_DB_HOST", "localhost")
+        env.setdefault("AGENT_KB_DB_PORT", "5432")
+        env.setdefault("AGENT_KB_DB_NAME", "united_agent")
+        env.setdefault("AGENT_KB_DB_USER", "postgres")
+        env.setdefault("AGENT_KB_DB_PASSWORD", "postgres")
     env.setdefault(
-        "DATABASE_URL",
+        "AGENT_KB_DATABASE_URL",
         f"postgres://{env['AGENT_KB_DB_USER']}:{env['AGENT_KB_DB_PASSWORD']}@{env['AGENT_KB_DB_HOST']}:{env['AGENT_KB_DB_PORT']}/{env['AGENT_KB_DB_NAME']}",
     )
     return env
@@ -154,7 +164,7 @@ class LivePostgresTestCase(unittest.TestCase):
     def connection_for(self, *, user: str, password: str, autocommit: bool = False) -> psycopg.Connection:
         connection = psycopg.connect(
             host=self.env["AGENT_KB_DB_HOST"],
-            port=self.env["AGENT_KB_DB_PORT"],
+            port=int(self.env["AGENT_KB_DB_PORT"]),
             dbname=self.env["AGENT_KB_DB_NAME"],
             user=user,
             password=password,
@@ -185,10 +195,10 @@ class LivePostgresTestCase(unittest.TestCase):
         password: str,
         check: bool = False,
     ) -> subprocess.CompletedProcess[str]:
-        env = self.env | {
-            "AGENT_KB_DB_USER": user,
-            "AGENT_KB_DB_PASSWORD": password,
-        }
+        from urllib.parse import urlencode
+
+        db_url = f"postgres://{user}:{password}@{self.env['AGENT_KB_DB_HOST']}:{self.env['AGENT_KB_DB_PORT']}/{self.env['AGENT_KB_DB_NAME']}"
+        env = self.env | {"AGENT_KB_DATABASE_URL": db_url}
         return subprocess.run(
             ["python3", str(script_path), *args],
             cwd=ROOT,

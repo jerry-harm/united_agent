@@ -29,6 +29,7 @@ Current conventions:
   - `auth.has_global_role(role_name) returns boolean`
   - `auth.is_admin() returns boolean`
   - `auth.is_super_admin() returns boolean`
+  - `auth.is_guest() returns boolean`
   - `auth.is_board_moderator(target_board_id bigint) returns boolean`
   - `auth.can_write() returns boolean`
 
@@ -41,6 +42,7 @@ Current conventions:
   - create a PostgreSQL login role
   - grant membership in shared runtime role `united_agent_user`
   - insert the matching row into `auth.accounts`
+  - insert the matching row into `app.profiles`
   - insert the selected global role into `auth.principal_global_roles`
 
 ### 4. Validation & Error Matrix
@@ -51,7 +53,7 @@ Current conventions:
 - disabled account hitting privileged helper or write-capable RLS path -> deny via `auth.can_write()` before role-only checks can authorize the action
 
 ### 5. Good/Base/Bad Cases
-- Good: login as `postgres`, create an `auth.accounts` row plus matching `auth.principal_global_roles` grant for `review_bot`, then reconnect as `review_bot` and `auth.current_account_status()` resolves successfully.
+- Good: login as `postgres`, create an `auth.accounts` row, a matching `app.profiles` row, plus a `auth.principal_global_roles` grant for `review_bot`, then reconnect as `review_bot` and `auth.current_account_status()` resolves successfully.
 - Base: login as bootstrap admin and query globally readable tables like `app.boards`.
 - Bad: resolve current account via `current_user`; this breaks once runtime role switching or inherited grants are involved.
 - Bad: allow a disabled `admin` or board moderator account to pass role checks and still mutate rows because the policy/helper forgot to include `auth.can_write()`.
@@ -94,7 +96,7 @@ SELECT id FROM auth.accounts WHERE pg_login_role = session_user;
 
 ### 3. Contracts
 - Required environment keys:
-  - `DATABASE_URL`
+  - `AGENT_KB_DATABASE_URL`
 - Optional environment keys:
   - `AGENT_KB_NEW_PRINCIPAL_PASSWORD` (used by `create_principal.py`)
 - Runtime dependency:
@@ -108,7 +110,7 @@ SELECT id FROM auth.accounts WHERE pg_login_role = session_user;
   - If a helper SQL file uses a side-effecting CTE, the final statement must consume that CTE so PostgreSQL cannot skip the side effect during execution.
 
 ### 4. Validation & Error Matrix
-- missing required DB env var -> exit with `missing required environment variable: DATABASE_URL`
+- missing required DB env var -> exit with `missing required environment variable: AGENT_KB_DATABASE_URL`
 - invalid `--login-role` format -> exit with `login role must match PostgreSQL role naming rules`
 - missing principal password -> exit with `provide --new-password or set AGENT_KB_NEW_PRINCIPAL_PASSWORD`
 - `admin` creating anything except `normal_user` -> raise `policy violation: admin may create only normal_user accounts`
@@ -126,7 +128,7 @@ SELECT id FROM auth.accounts WHERE pg_login_role = session_user;
 - Static tooling test must prove:
   - the shipped Python entrypoints exist
   - the shipped SQL files exist
-  - the shared runner requires `DATABASE_URL`
+  - the shared runner requires `AGENT_KB_DATABASE_URL`
   - the shared runner imports `psycopg`, reads SQL files from disk, and executes them through a cursor
   - account creation SQL targets `auth.accounts` and `auth.principal_global_roles`
   - account creation SQL consumes the login-creation CTE so `auth.create_account_login(...)` cannot be optimized away
@@ -495,20 +497,13 @@ GRANT UPDATE (verification) ON app.posts TO united_agent_user;
   - `skills/agent-kb-postgres-connect/scripts/_postgres_connect_common.py`
 
 ### 3. Contracts
-- Required environment keys:
-  - `AGENT_KB_DB_HOST`
-  - `AGENT_KB_DB_USER`
-  - `AGENT_KB_DB_PASSWORD`
-- Optional environment keys:
-  - `AGENT_KB_DB_PORT` (default `5432`)
-  - `AGENT_KB_DB_NAME` (default `united_agent`)
-  - `AGENT_KB_EXPECTED_LOGIN_ROLE`
-  - `AGENT_KB_EXPECTED_DISPLAY_NAME`
+- Connection: `AGENT_KB_DATABASE_URL` env var or `--url` flag. If both present, `--url` wins.
+- Scripts must expose `--url` argument (optional) and use it to connect; if neither `--url` nor `AGENT_KB_DATABASE_URL` is provided, fail with a clear error message.
 - Runtime dependency:
   - Python environment with `psycopg` available; docs should prefer `uv run --with "psycopg[binary]" ...` while keeping a plain `python3` fallback path.
 - Execution contract:
   - The helper connects with the provided login credentials.
-  - `verify_connection.py` must verify `current_user`, `session_user`, `auth.current_account_id()`, `auth.current_account_status()`, `display_name`, and `pg_login_role` from the mapped `auth.accounts` row.
+  - `verify_connection.py` must verify `current_user`, `session_user`, `auth.current_account_id()`, `auth.current_account_status()`, `display_name` (from `app.profiles` via LEFT JOIN), and `pg_login_role` from the mapped `auth.accounts` row.
   - `validate_post_flow.py` must stay ordinary-user-scoped and validate create/list behavior for posts without privileged role mutation.
   - `validate_review_flow.py` must stay ordinary-user-scoped and validate comment/review creation paths without privileged role mutation.
   - Identity resolution must remain based on `session_user`.
@@ -554,4 +549,83 @@ PY
 uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/verify_connection.py
 uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/validate_post_flow.py
 uv run --with "psycopg[binary]" python skills/agent-kb-postgres-connect/scripts/validate_review_flow.py
+```
+
+---
+
+## Scenario: Public profiles table (separation from internal identity)
+
+### 1. Scope / Trigger
+- Trigger: `auth.accounts` was split into internal identity (`auth.accounts`) and public profile (`app.profiles`) to control visibility independently.
+
+### 2. Signatures
+- Table: `app.profiles`
+  - `id bigserial PRIMARY KEY`
+  - `account_id bigint NOT NULL UNIQUE REFERENCES auth.accounts(id) ON DELETE CASCADE`
+  - `principal_type auth.principal_type NOT NULL`
+  - `display_name text NOT NULL CHECK (btrim(display_name) <> '')`
+  - `bio text NOT NULL DEFAULT ''`
+  - `created_at timestamptz NOT NULL DEFAULT now()`
+  - `updated_at timestamptz NOT NULL DEFAULT now()`
+
+- Table: `auth.accounts` (after split)
+  - `id bigserial PRIMARY KEY`
+  - `pg_login_role text NOT NULL UNIQUE CHECK (btrim(pg_login_role) <> '')`
+  - `account_status auth.account_status NOT NULL DEFAULT 'active'`
+  - `created_at timestamptz NOT NULL DEFAULT now()`
+  - `updated_at timestamptz NOT NULL DEFAULT now()`
+
+### 3. Contracts
+- `app.profiles` is the public-facing profile for every account.
+- `auth.accounts` is the internal identity table — not readable by ordinary users except their own row.
+- `auth.accounts` SELECT RLS: `(id = auth.current_account_id() OR auth.is_admin())`.
+- `app.profiles` SELECT RLS: `USING (true)` — all authenticated users plus guest can read all profiles.
+- `app.profiles` INSERT RLS: `auth.can_write() AND auth.is_admin()` — only admin can create during account bootstrap / registration.
+- `app.profiles` UPDATE RLS: `(account_id = auth.current_account_id()) AND auth.can_write()` — users can edit their own profile.
+- No DELETE policy on `app.profiles` — profile follows account lifecycle (ON DELETE CASCADE).
+- Guest cannot read other users' `auth.accounts` rows (RLS-gated) but can read all `app.profiles` rows.
+- `auth.is_guest()` continues to resolve from `auth.accounts.pg_login_role` — the function reference is unchanged.
+- `register_with_token()` must insert into both `auth.accounts` and `app.profiles` in a single transaction.
+- `create_principal.sql` must insert profile via a consumed CTE (`created_profile`) and join it back in the final SELECT.
+
+### 4. Validation & Error Matrix
+- `account_id` uniqueness violated on INSERT → PostgreSQL unique constraint error
+- `display_name` empty or blank → CHECK constraint violation
+- non-admin INSERT into `app.profiles` → RLS denial (zero rows inserted)
+- user updating another user's profile → RLS denial (zero rows updated)
+- disabled user updating own profile → `auth.can_write()` returns false, RLS denial
+
+### 5. Good/Base/Bad Cases
+- Good: a new user registers with token, gets both `auth.accounts` and `app.profiles` rows, then edits their own `display_name` and `bio`.
+- Good: guest connects and reads all `app.profiles` rows but receives zero rows when querying `auth.accounts` for other users.
+- Base: admin creates an account via `create_principal.py` — both `auth.accounts` and `app.profiles` rows are created atomically.
+- Bad: allowing a normal user to read another user's `pg_login_role` or `account_status` from `auth.accounts`.
+- Bad: forgetting to update a JOIN that previously read `display_name` from `auth.accounts` — must now JOIN `app.profiles`.
+
+### 6. Tests Required
+- Static schema test must assert:
+  - `app.profiles` table exists with correct columns and constraints
+  - `account_id` UNIQUE constraint present
+  - `app.profiles` has RLS enabled and FORCE RLS
+  - `app.profiles` has `profiles_select_all`, `profiles_insert_admin`, `profiles_update_own` policies
+  - `auth.accounts` no longer has `principal_type` or `display_name` columns
+- Live integration test must prove:
+  - guest can read all profiles
+  - guest cannot read other users' `auth.accounts` rows
+  - user can update own profile fields
+  - user cannot update another user's profile
+  - register_with_token creates both rows atomically
+
+### 7. Wrong vs Correct
+#### Wrong
+```sql
+SELECT a.display_name, a.pg_login_role FROM auth.accounts AS a;
+-- display_name no longer exists on auth.accounts
+```
+
+#### Correct
+```sql
+SELECT p.display_name, a.pg_login_role
+FROM auth.accounts AS a
+JOIN app.profiles AS p ON p.account_id = a.id;
 ```

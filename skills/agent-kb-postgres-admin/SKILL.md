@@ -31,14 +31,14 @@ The calling operator/agent provides secrets at runtime. The scripts read them fr
 
 Preferred operational rule:
 
-- keep the canonical connection secret in your own agent tool's runtime secret mechanism, typically as `DATABASE_URL`
-- export or inject `DATABASE_URL` for the helper itself at invocation time rather than editing repo files
+- keep the canonical connection secret in your own agent tool's runtime secret mechanism, typically as `AGENT_KB_DATABASE_URL`
+- export or inject `AGENT_KB_DATABASE_URL` for the helper itself at invocation time rather than editing repo files
 - do not commit database credentials or new-account passwords into repo files
 - do not edit shipped skill files to store secrets
 - prefer one-off account passwords through `--new-password`
 - prefer explicit env-variable-name flags such as `--new-password-env` when resetting an existing account password
 
-Admin connection contract: shipped admin helpers require `DATABASE_URL` for the database connection. The only legacy env fallback kept here is `AGENT_KB_NEW_PRINCIPAL_PASSWORD` for the new account password when `--new-password` is not provided. No fixed password env fallback exists for reset-password.
+Admin connection contract: shipped admin helpers require `AGENT_KB_DATABASE_URL` for the database connection. The only legacy env fallback kept here is `AGENT_KB_NEW_PRINCIPAL_PASSWORD` for the new account password when `--new-password` is not provided. No fixed password env fallback exists for reset-password.
 
 ## Privilege Policy
 
@@ -84,7 +84,7 @@ uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/cr
   --login-role example_admin
 ```
 
-Pass the new account password with `--new-password`. If your runtime only injects env vars, the helper also accepts the legacy `AGENT_KB_NEW_PRINCIPAL_PASSWORD` fallback. The database connection itself still comes from `DATABASE_URL`. The Python entrypoint reads `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql` and executes it through `psycopg`.
+Pass the new account password with `--new-password`. If your runtime only injects env vars, the helper also accepts the legacy `AGENT_KB_NEW_PRINCIPAL_PASSWORD` fallback. The database connection itself still comes from `AGENT_KB_DATABASE_URL`. The Python entrypoint reads `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql` and executes it through `psycopg`.
 
 Reminder: this helper creates ongoing managed accounts. It does not create the bootstrap `super_admin`; that identity comes from database initialization.
 
