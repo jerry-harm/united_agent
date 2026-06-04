@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from _postgres_connect_common import connect, require_env  # noqa: E402
+from _postgres_connect_common import connect  # noqa: E402
 
 
 SUCCESS_MARKER = "review flow ok"
@@ -25,9 +25,6 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
-    require_env("AGENT_KB_DB_HOST")
-    require_env("AGENT_KB_DB_USER")
-    require_env("AGENT_KB_DB_PASSWORD")
     args = parse_args()
 
     with connect() as connection:
@@ -41,7 +38,7 @@ def main() -> int:
 
             cursor.execute(
                 """
-                INSERT INTO app.review_entries (post_id, account_id, lftm, conclusion)
+                INSERT INTO app.review_entries (post_id, account_id, lgtm, conclusion)
                 VALUES (%s, auth.current_account_id(), false, %s)
                 ON CONFLICT (post_id, account_id) DO UPDATE
                 SET conclusion = EXCLUDED.conclusion

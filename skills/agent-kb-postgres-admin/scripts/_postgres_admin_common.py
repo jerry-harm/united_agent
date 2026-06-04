@@ -36,7 +36,7 @@ def sql_file(relative_path: str) -> Path:
 PLACEHOLDER_RE = re.compile(r"\{\{\s*([a-z_][a-z0-9_]*)\s*\}\}")
 
 
-def render_sql(connection: psycopg.Connection, template: str, variables: dict[str, str]) -> str:
+def render_sql(connection: psycopg.Connection, template: str, variables: dict[str, object]) -> str:
     def replace(match: re.Match[str]) -> str:
         name = match.group(1)
         if name not in variables:
@@ -46,7 +46,7 @@ def render_sql(connection: psycopg.Connection, template: str, variables: dict[st
     return PLACEHOLDER_RE.sub(replace, template)
 
 
-def run_sql_file(sql_path: Path, variables: dict[str, str]) -> int:
+def run_sql_file(sql_path: Path, variables: dict[str, object]) -> int:
     with psycopg.connect(database_url()) as connection:
         connection.autocommit = False
         rendered_sql = render_sql(connection, sql_path.read_text(encoding="utf-8"), variables)

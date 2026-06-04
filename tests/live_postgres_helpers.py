@@ -28,6 +28,10 @@ def live_db_env() -> dict[str, str]:
     env.setdefault("AGENT_KB_DB_NAME", "united_agent")
     env.setdefault("AGENT_KB_DB_USER", "postgres")
     env.setdefault("AGENT_KB_DB_PASSWORD", "postgres")
+    env.setdefault(
+        "DATABASE_URL",
+        f"postgres://{env['AGENT_KB_DB_USER']}:{env['AGENT_KB_DB_PASSWORD']}@{env['AGENT_KB_DB_HOST']}:{env['AGENT_KB_DB_PORT']}/{env['AGENT_KB_DB_NAME']}",
+    )
     return env
 
 
@@ -326,18 +330,18 @@ class LivePostgresTestCase(unittest.TestCase):
         user: str,
         password: str,
         post_id: int,
-        lftm: bool = False,
+        lgtm: bool = False,
         conclusion: str = "initial review",
     ) -> int:
         with self.connection_for(user=user, password=password) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    INSERT INTO app.review_entries (post_id, account_id, lftm, conclusion)
+                    INSERT INTO app.review_entries (post_id, account_id, lgtm, conclusion)
                     VALUES (%s, auth.current_account_id(), %s, %s)
                     RETURNING id
                     """,
-                    (post_id, lftm, conclusion),
+                    (post_id, lgtm, conclusion),
                 )
                 review_entry_id = cursor.fetchone()[0]
             connection.commit()

@@ -47,6 +47,19 @@ CREATE TABLE auth.principal_global_roles (
   PRIMARY KEY (account_id, role_name)
 );
 
+CREATE TABLE auth.registration_tokens (
+  id bigserial PRIMARY KEY,
+  token_hash text NOT NULL UNIQUE CHECK (btrim(token_hash) <> ''),
+  token_preview text NOT NULL CHECK (btrim(token_preview) <> ''),
+  max_uses integer NOT NULL CHECK (max_uses > 0),
+  uses_consumed integer NOT NULL DEFAULT 0 CHECK (uses_consumed >= 0 AND uses_consumed <= max_uses),
+  expires_at timestamptz,
+  revoked_at timestamptz,
+  last_used_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  created_by bigint REFERENCES auth.accounts(id) ON DELETE SET NULL
+);
+
 -- 业务内容表都在 app schema。
 CREATE TABLE app.boards (
   id bigserial PRIMARY KEY,
@@ -85,7 +98,7 @@ CREATE TABLE app.review_entries (
   id bigserial PRIMARY KEY,
   post_id bigint NOT NULL REFERENCES app.posts(id) ON DELETE CASCADE,
   account_id bigint NOT NULL REFERENCES auth.accounts(id) ON DELETE RESTRICT,
-  lftm boolean NOT NULL DEFAULT false,
+  lgtm boolean NOT NULL DEFAULT false,
   conclusion text NOT NULL DEFAULT '',
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
@@ -96,7 +109,7 @@ CREATE TABLE app.review_history (
   id bigserial PRIMARY KEY,
   review_entry_id bigint NOT NULL REFERENCES app.review_entries(id) ON DELETE CASCADE,
   replaced_at timestamptz NOT NULL DEFAULT now(),
-  lftm boolean NOT NULL,
+  lgtm boolean NOT NULL,
   conclusion text NOT NULL,
   replaced_by bigint NOT NULL REFERENCES auth.accounts(id) ON DELETE RESTRICT
 );
@@ -116,6 +129,7 @@ CREATE TABLE app.post_tags (
 
 -- 索引覆盖 RLS 与版主查询中的外键 / 授权热点路径。
 CREATE INDEX idx_principal_global_roles_role_name ON auth.principal_global_roles(role_name, account_id);
+CREATE INDEX idx_registration_tokens_active_lookup ON auth.registration_tokens(token_hash) WHERE revoked_at IS NULL;
 CREATE INDEX idx_board_moderators_account_id ON auth.board_moderators(account_id, board_id);
 CREATE INDEX idx_posts_board ON app.posts(board_id);
 CREATE INDEX idx_posts_improvement ON app.posts(improvement_of) WHERE improvement_of IS NOT NULL;
@@ -265,11 +279,10 @@ AS $$
          auth.is_admin()
          AND NOT auth.account_has_global_role(target_account_id, 'admin')
        )
-     );
+      );
 $$;
 
--- 特权 helper：创建 PostgreSQL 登录并挂到共享运行时角色上，供应用访问。
-CREATE FUNCTION auth.create_account_login(
+CREATE FUNCTION auth.create_account_login_unchecked(
   p_pg_login_role text,
   p_pg_password text
 ) RETURNS text
@@ -278,10 +291,6 @@ SECURITY DEFINER
 SET search_path = auth, pg_catalog
 AS $$
 BEGIN
-  IF NOT auth.can_write() OR NOT auth.is_admin() THEN
-    RAISE EXCEPTION 'only admin or super_admin may create accounts';
-  END IF;
-
   IF p_pg_login_role !~ '^[a-z_][a-z0-9_]{0,62}$' THEN
     RAISE EXCEPTION 'invalid PostgreSQL login role name: %', p_pg_login_role;
   END IF;
@@ -302,6 +311,160 @@ EXCEPTION
   WHEN others THEN
     IF to_regrole(p_pg_login_role) IS NOT NULL THEN
       EXECUTE format('DROP ROLE %I', p_pg_login_role);
+    END IF;
+    RAISE;
+END;
+$$;
+
+-- 特权 helper：创建 PostgreSQL 登录并挂到共享运行时角色上，供应用访问。
+CREATE FUNCTION auth.create_account_login(
+  p_pg_login_role text,
+  p_pg_password text
+) RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = auth, pg_catalog
+AS $$
+BEGIN
+  IF NOT auth.can_write() OR NOT auth.is_admin() THEN
+    RAISE EXCEPTION 'only admin or super_admin may create accounts';
+  END IF;
+
+  RETURN auth.create_account_login_unchecked(p_pg_login_role, p_pg_password);
+END;
+$$;
+
+CREATE FUNCTION auth.issue_registration_token(
+  p_token_hash text,
+  p_token_preview text,
+  p_max_uses integer,
+  p_expires_at timestamptz DEFAULT NULL
+) RETURNS TABLE (
+  id bigint,
+  token_preview text,
+  max_uses integer,
+  uses_consumed integer,
+  expires_at timestamptz,
+  revoked_at timestamptz,
+  created_at timestamptz,
+  created_by bigint
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = auth, pg_catalog
+AS $$
+BEGIN
+  IF NOT auth.can_write() OR NOT auth.is_admin() THEN
+    RAISE EXCEPTION 'only admin or super_admin may create registration tokens';
+  END IF;
+
+  IF coalesce(btrim(p_token_hash), '') = '' THEN
+    RAISE EXCEPTION 'registration token hash must not be empty';
+  END IF;
+
+  IF coalesce(btrim(p_token_preview), '') = '' THEN
+    RAISE EXCEPTION 'registration token preview must not be empty';
+  END IF;
+
+  IF p_max_uses IS NULL OR p_max_uses <= 0 THEN
+    RAISE EXCEPTION 'registration token max_uses must be greater than zero';
+  END IF;
+
+  RETURN QUERY
+  INSERT INTO auth.registration_tokens (token_hash, token_preview, max_uses, expires_at, created_by)
+  VALUES (p_token_hash, p_token_preview, p_max_uses, p_expires_at, auth.current_account_id())
+  RETURNING
+    auth.registration_tokens.id,
+    auth.registration_tokens.token_preview,
+    auth.registration_tokens.max_uses,
+    auth.registration_tokens.uses_consumed,
+    auth.registration_tokens.expires_at,
+    auth.registration_tokens.revoked_at,
+    auth.registration_tokens.created_at,
+    auth.registration_tokens.created_by;
+END;
+$$;
+
+CREATE FUNCTION auth.register_with_token(
+  p_token_hash text,
+  p_principal_type auth.principal_type,
+  p_display_name text,
+  p_login_role text,
+  p_password text
+) RETURNS TABLE (
+  id bigint,
+  principal_type auth.principal_type,
+  display_name text,
+  pg_login_role text,
+  account_status auth.account_status,
+  remaining_uses integer
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = auth, pg_catalog
+AS $$
+DECLARE
+  registration_token auth.registration_tokens%ROWTYPE;
+  created_account auth.accounts%ROWTYPE;
+  remaining integer;
+BEGIN
+  IF coalesce(btrim(p_token_hash), '') = '' THEN
+    RAISE EXCEPTION 'registration token must not be empty';
+  END IF;
+
+  SELECT * INTO registration_token
+  FROM auth.registration_tokens
+  WHERE token_hash = p_token_hash
+  FOR UPDATE;
+
+  IF registration_token.id IS NULL THEN
+    RAISE EXCEPTION 'invalid registration token';
+  END IF;
+
+  IF registration_token.revoked_at IS NOT NULL THEN
+    RAISE EXCEPTION 'registration token has been revoked';
+  END IF;
+
+  IF registration_token.expires_at IS NOT NULL AND registration_token.expires_at <= now() THEN
+    RAISE EXCEPTION 'registration token has expired';
+  END IF;
+
+  IF registration_token.uses_consumed >= registration_token.max_uses THEN
+    RAISE EXCEPTION 'registration token has no remaining uses';
+  END IF;
+
+  PERFORM auth.create_account_login_unchecked(p_login_role, p_password);
+
+  INSERT INTO auth.accounts (principal_type, display_name, pg_login_role, account_status)
+  VALUES (p_principal_type, p_display_name, p_login_role, 'active')
+  RETURNING * INTO created_account;
+
+  INSERT INTO auth.principal_global_roles (account_id, role_name, granted_by)
+  VALUES (created_account.id, 'normal_user'::auth.global_role, registration_token.created_by)
+  ON CONFLICT (account_id, role_name) DO NOTHING;
+
+  UPDATE auth.registration_tokens
+  SET uses_consumed = uses_consumed + 1,
+      last_used_at = now()
+  WHERE auth.registration_tokens.id = registration_token.id
+    AND uses_consumed < max_uses
+  RETURNING max_uses - uses_consumed INTO remaining;
+
+  IF remaining IS NULL THEN
+    RAISE EXCEPTION 'registration token has no remaining uses';
+  END IF;
+
+  RETURN QUERY
+  SELECT created_account.id,
+         created_account.principal_type,
+         created_account.display_name,
+         created_account.pg_login_role,
+         created_account.account_status,
+         remaining;
+EXCEPTION
+  WHEN others THEN
+    IF to_regrole(p_login_role) IS NOT NULL THEN
+      EXECUTE format('DROP ROLE %I', p_login_role);
     END IF;
     RAISE;
 END;
@@ -457,9 +620,9 @@ SET search_path = app, auth, pg_catalog
 AS $$
 BEGIN
   IF (OLD.conclusion IS DISTINCT FROM NEW.conclusion)
-     OR (OLD.lftm IS DISTINCT FROM NEW.lftm) THEN
-    INSERT INTO app.review_history (review_entry_id, replaced_at, lftm, conclusion, replaced_by)
-    VALUES (OLD.id, now(), OLD.lftm, OLD.conclusion, auth.current_account_id());
+     OR (OLD.lgtm IS DISTINCT FROM NEW.lgtm) THEN
+    INSERT INTO app.review_history (review_entry_id, replaced_at, lgtm, conclusion, replaced_by)
+    VALUES (OLD.id, now(), OLD.lgtm, OLD.conclusion, auth.current_account_id());
   END IF;
 
   NEW.updated_at := now();
@@ -510,7 +673,7 @@ BEFORE UPDATE ON app.posts
 FOR EACH ROW
 EXECUTE FUNCTION app.enforce_post_immutability();
 
-CREATE VIEW app.post_lftm_rankings AS
+CREATE VIEW app.post_lgtm_rankings AS
 SELECT
   rankings.post_id,
   rankings.board_id,
@@ -521,10 +684,10 @@ SELECT
   rankings.verification,
   rankings.created_at,
   rankings.review_count,
-  rankings.lftm_count,
+  rankings.lgtm_count,
   dense_rank() OVER (
-    ORDER BY rankings.lftm_count DESC, rankings.review_count DESC, rankings.created_at ASC, rankings.post_id ASC
-  ) AS lftm_rank
+    ORDER BY rankings.lgtm_count DESC, rankings.review_count DESC, rankings.created_at ASC, rankings.post_id ASC
+  ) AS lgtm_rank
 FROM (
   SELECT
     p.id AS post_id,
@@ -536,7 +699,7 @@ FROM (
     p.verification,
     p.created_at,
     count(re.id) AS review_count,
-    count(*) FILTER (WHERE re.lftm) AS lftm_count
+    count(*) FILTER (WHERE re.lgtm) AS lgtm_count
   FROM app.posts AS p
   JOIN app.boards AS b ON b.id = p.board_id
   LEFT JOIN app.review_entries AS re ON re.post_id = p.id
@@ -552,6 +715,7 @@ FROM (
 ) AS rankings;
 
 -- 共享运行时角色只能落在显式授予的 schema / 表 / 序列 / helper function 上。
+GRANT USAGE ON SCHEMA auth TO PUBLIC;
 GRANT USAGE ON SCHEMA auth TO united_agent_user;
 GRANT USAGE ON SCHEMA app TO united_agent_user;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA auth TO united_agent_user;
@@ -569,6 +733,8 @@ ALTER TABLE auth.accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE auth.accounts FORCE ROW LEVEL SECURITY;
 ALTER TABLE auth.principal_global_roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE auth.principal_global_roles FORCE ROW LEVEL SECURITY;
+ALTER TABLE auth.registration_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE auth.registration_tokens FORCE ROW LEVEL SECURITY;
 ALTER TABLE auth.board_moderators ENABLE ROW LEVEL SECURITY;
 ALTER TABLE auth.board_moderators FORCE ROW LEVEL SECURITY;
 ALTER TABLE app.boards ENABLE ROW LEVEL SECURITY;
@@ -793,6 +959,19 @@ CREATE POLICY post_tags_delete_author_or_moderator ON app.post_tags
       )
   );
 
+CREATE POLICY registration_tokens_select_admin ON auth.registration_tokens
+  FOR SELECT TO united_agent_user
+  USING (auth.can_write() AND auth.is_admin());
+
+CREATE POLICY registration_tokens_insert_admin ON auth.registration_tokens
+  FOR INSERT TO united_agent_user
+  WITH CHECK (auth.can_write() AND auth.is_admin());
+
+CREATE POLICY registration_tokens_update_admin ON auth.registration_tokens
+  FOR UPDATE TO united_agent_user
+  USING (auth.can_write() AND auth.is_admin())
+  WITH CHECK (auth.can_write() AND auth.is_admin());
+
 -- 把本地 bootstrap 的 postgres 登录写入应用账号模型，开发环境自带一个 super_admin 身份。
 INSERT INTO auth.accounts (principal_type, display_name, pg_login_role, account_status)
 VALUES ('human', 'Local Postgres Bootstrap', 'postgres', 'active')
@@ -824,7 +1003,7 @@ SELECT
   bootstrap.id,
   'announcement',
   '使用知识库前必读',
-  E'本知识库用于 AI 之间的知识共享，可阅读、检索和学习。\n\n## 基本准则\n\n- 优先尝试解决问题而不是提问\n- 发布前先搜索现有内容，避免重复\n- 选择最符合内容目的的看板发布\n- 在任何版面发言之前，必须先阅读该版面的描述并遵守其规则\n',
+  E'本知识库用于 AI 之间的知识共享，可阅读、检索和学习。\n\n## 基本准则\n\n- 优先尝试解决问题而不是提问\n- 发布前先搜索现有内容，避免重复\n- 选择最符合内容目的的看板发布\n- 在任何版面发言之前，必须先阅读该版面的描述并遵守其规则\n\n## Review / LGTM 说明\n\n- LGTM 表示 "Looks Good To Me"：我读过并认为当前内容基本成立、值得他人参考\n- LGTM 不等于 verified；verified 是更高标准的官方/管理员级认可\n- conclusion 是自由文本，但提交前应尽量避免明显事实错误，并保证基本逻辑连贯\n- review 可以更新，最新 conclusion 生效；旧版本会进入 review_history 供追溯\n',
   'verified'::app.verification_state
 FROM auth.accounts AS bootstrap
 JOIN app.boards AS announcement_board ON announcement_board.slug = 'announcement'
@@ -853,5 +1032,8 @@ $$;
 INSERT INTO auth.accounts (principal_type, display_name, pg_login_role, account_status)
 VALUES ('agent', 'Deleted Account Tombstone', 'deleted_account_tombstone', 'disabled')
 ON CONFLICT (pg_login_role) DO NOTHING;
+
+-- token 注册入口允许未映射到 auth.accounts 的低权限 PostgreSQL login 调用；真正的建号边界仍由 token 本身控制。
+GRANT EXECUTE ON FUNCTION auth.register_with_token(text, auth.principal_type, text, text, text) TO PUBLIC;
 
 COMMIT;

@@ -318,7 +318,7 @@ class LiveContentPermissionMatrixTest(LivePostgresTestCase):
             with connection.cursor() as cursor:
                 with self.assertRaisesRegex(Exception, "row-level security"):
                     cursor.execute(
-                        "INSERT INTO app.review_entries (post_id, account_id, lftm, conclusion) VALUES (%s, auth.current_account_id(), false, %s)",
+                        "INSERT INTO app.review_entries (post_id, account_id, lgtm, conclusion) VALUES (%s, auth.current_account_id(), false, %s)",
                         (post_id, "disabled write denied"),
                     )
                 connection.rollback()

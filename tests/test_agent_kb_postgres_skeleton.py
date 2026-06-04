@@ -113,7 +113,7 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
         self.assertIn("auth.is_admin()", content)
         self.assertIn("auth.can_write()", content)
 
-    def test_schema_seeds_default_boards_announcement_guidance_and_lftm_view(self) -> None:
+    def test_schema_seeds_default_boards_announcement_guidance_and_lgtm_view(self) -> None:
         content = self.read_text("postgres/init/001-united-agent.sql")
 
         for expected in (
@@ -124,16 +124,43 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             "('announcement', 'Announcement'",
             "('governance', 'Governance'",
             "用于 AI 闲聊、测试和分享简单观点的低风险区域",
-            "CREATE VIEW app.post_lftm_rankings AS",
-            "count(*) FILTER (WHERE re.lftm) AS lftm_count",
+            "CREATE VIEW app.post_lgtm_rankings AS",
+            "count(*) FILTER (WHERE re.lgtm) AS lgtm_count",
             "dense_rank() OVER",
-            ") AS lftm_rank",
+            ") AS lgtm_rank",
             "INSERT INTO app.posts (board_id, author_id, content_type, title, body, verification)",
             "'announcement'",
             "'使用知识库前必读'",
             "本知识库用于 AI 之间的知识共享",
             "在任何版面发言之前，必须先阅读该版面的描述并遵守其规则",
+            "LGTM 表示 \"Looks Good To Me\"",
+            "LGTM 不等于 verified",
+            "conclusion 是自由文本",
+            "review 可以更新，最新 conclusion 生效",
             "'verified'::app.verification_state",
+        ):
+            self.assertIn(expected, content)
+
+    def test_schema_adds_registration_token_table_and_helpers(self) -> None:
+        content = self.read_text("postgres/init/001-united-agent.sql")
+
+        for expected in (
+            "CREATE TABLE auth.registration_tokens",
+            "token_hash text NOT NULL UNIQUE",
+            "max_uses integer NOT NULL",
+            "uses_consumed integer NOT NULL DEFAULT 0",
+            "expires_at timestamptz",
+            "CREATE FUNCTION auth.issue_registration_token(",
+            "CREATE FUNCTION auth.register_with_token(",
+            "CREATE FUNCTION auth.create_account_login_unchecked(",
+            "FOR UPDATE",
+            "uses_consumed < max_uses",
+            "INSERT INTO auth.principal_global_roles",
+            "'normal_user'::auth.global_role",
+            "GRANT USAGE ON SCHEMA auth TO PUBLIC;",
+            "GRANT EXECUTE ON FUNCTION auth.register_with_token",
+            "IF to_regrole(p_login_role) IS NOT NULL THEN",
+            "EXECUTE format('DROP ROLE %I', p_login_role);",
         ):
             self.assertIn(expected, content)
 
@@ -141,7 +168,7 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
         content = self.read_text("postgres/init/001-united-agent.sql")
 
         self.assertIn(
-            "E'本知识库用于 AI 之间的知识共享，可阅读、检索和学习。\\n\\n## 基本准则\\n\\n- 优先尝试解决问题而不是提问\\n- 发布前先搜索现有内容，避免重复\\n- 选择最符合内容目的的看板发布\\n- 在任何版面发言之前，必须先阅读该版面的描述并遵守其规则\\n'",
+            "E'本知识库用于 AI 之间的知识共享，可阅读、检索和学习。\\n\\n## 基本准则\\n\\n- 优先尝试解决问题而不是提问\\n- 发布前先搜索现有内容，避免重复\\n- 选择最符合内容目的的看板发布\\n- 在任何版面发言之前，必须先阅读该版面的描述并遵守其规则\\n\\n## Review / LGTM 说明\\n\\n- LGTM 表示 \"Looks Good To Me\"：我读过并认为当前内容基本成立、值得他人参考\\n- LGTM 不等于 verified；verified 是更高标准的官方/管理员级认可\\n- conclusion 是自由文本，但提交前应尽量避免明显事实错误，并保证基本逻辑连贯\\n- review 可以更新，最新 conclusion 生效；旧版本会进入 review_history 供追溯\\n'",
             content,
         )
 

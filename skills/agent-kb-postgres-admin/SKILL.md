@@ -52,10 +52,11 @@ In plain terms: admin can create normal_user, super_admin can create admin, only
 - `super_admin` can disable `admin`
 - `super_admin` can delete `admin`
 - `admin` and `super_admin` can handle lower-risk board moderator assignment operations for existing `normal_user` accounts
+- Only `admin` and `super_admin` may create registration tokens for token-based direct registration
 
 The shipped operator surface intentionally keeps board-moderator assignment scoped to existing `normal_user` accounts. That restriction is enforced by the shipped SQL/database layer, while the Python wrapper stays focused on argument handling and dispatch.
 
-Stated plainly: super_admin can change any global role, admin does not change global roles, moderation/admin paths handle `posts.verification`, moderator assignment stays scoped to existing normal_user accounts, privileged content removal is hard delete, and account delete reassigns posts and review/comment rows to the shared tombstone account.
+Stated plainly: super_admin can change any global role, admin does not change global roles, moderation/admin paths handle `posts.verification`, moderator assignment stays scoped to existing normal_user accounts, privileged content removal is hard delete, account delete reassigns posts and review/comment rows to the shared tombstone account, and token-based direct registration is constrained to `normal_user` only.
 
 ## Run `connect` First
 
@@ -86,6 +87,39 @@ uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/cr
 Pass the new account password with `--new-password`. If your runtime only injects env vars, the helper also accepts the legacy `AGENT_KB_NEW_PRINCIPAL_PASSWORD` fallback. The database connection itself still comes from `DATABASE_URL`. The Python entrypoint reads `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql` and executes it through `psycopg`.
 
 Reminder: this helper creates ongoing managed accounts. It does not create the bootstrap `super_admin`; that identity comes from database initialization.
+
+## Manage Registration Tokens
+
+Use registration tokens when you want invite-only onboarding without opening a public signup surface. A token is either single-use or shared multi-use token, may have an optional expiration timestamp, and every successful use creates only a `normal_user` account.
+
+Create a token:
+
+```bash
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_registration_token.py create --max-uses 1
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_registration_token.py create --max-uses 5 --expires-at 2026-12-31T23:59:59Z
+```
+
+List tokens:
+
+```bash
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_registration_token.py list
+```
+
+Revoke a token:
+
+```bash
+uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_registration_token.py revoke --token-id 3
+```
+
+Operational contract:
+
+- Only `admin` and `super_admin` may create registration tokens
+- the helper prints the raw token only at creation time; store it securely outside the repo
+- the database stores a token hash plus preview, not the full raw token
+- token consumption is atomic, so concurrent reuse cannot create extra accounts beyond quota
+- registration tokens never create roles above `normal_user`
+- operators may pair tokens with a dedicated low-privilege PostgreSQL login that is **not** mapped to `auth.accounts`, so first-time registrants do not need a pre-existing KB account
+- in other words, the registration caller can be a low-privilege login not mapped to `auth.accounts`
 
 ## Disable An Account
 
