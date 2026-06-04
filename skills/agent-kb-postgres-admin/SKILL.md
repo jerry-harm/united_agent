@@ -118,8 +118,8 @@ Operational contract:
 - the database stores a token hash plus preview, not the full raw token
 - token consumption is atomic, so concurrent reuse cannot create extra accounts beyond quota
 - registration tokens never create roles above `normal_user`
-- operators may pair tokens with a dedicated low-privilege PostgreSQL login that is **not** mapped to `auth.accounts`, so first-time registrants do not need a pre-existing KB account
-- in other words, the registration caller can be a low-privilege login not mapped to `auth.accounts`
+- operators should instruct first-time registrants to connect as the built-in `guest` PostgreSQL login (password `guest`), which is the only account permitted to call `register_with_token`
+- `guest` is mapped to `auth.accounts` as a read-only `normal_user`; it can read all public profiles (`app.profiles`) and content tables but cannot write or read other users' `auth.accounts` rows
 
 ## Disable An Account
 

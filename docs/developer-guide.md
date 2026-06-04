@@ -47,8 +47,8 @@ export AGENT_KB_DATABASE_URL=postgres://postgres:postgres@localhost:5432/united_
 
 其中：
 
-- connect helper falls back to `guest/guest` on localhost when `AGENT_KB_DATABASE_URL` is not set
-- admin helper 现在只接受 `AGENT_KB_DATABASE_URL` 作为数据库连接入口
+- connect helper 要求 `AGENT_KB_DATABASE_URL` 或 `--url` 传入连接凭据，没有默认 fallback
+- admin helper 只接受 `AGENT_KB_DATABASE_URL` 作为数据库连接入口
 - `AGENT_KB_NEW_PRINCIPAL_PASSWORD` 仅保留给 `create_principal.py` 作为新账号密码的历史 fallback
 
 ## Connect skill 与普通用户验证
@@ -81,7 +81,7 @@ python3 skills/agent-kb-postgres-connect/scripts/validate_review_flow.py --post-
 
 `register_with_token.py` 用于 token 注册：调用方拿到管理员生成的 token 后，脚本会在客户端先做 SHA-256，再调用数据库里的注册 helper。这个路径不是公开注册；没有 token 就不能建号，而且无论 token 如何配置，最终只能创建 `normal_user`。
 
-它也不要求调用方先拥有一个已映射到 `auth.accounts` 的 KB 账号。实际做法是：运维提供一个专用的低权限 PostgreSQL login（不写入 `auth.accounts`），把它作为 `AGENT_KB_DATABASE_URL` 注入给 `register_with_token.py`；脚本再凭 token 调用受限注册函数完成建号。
+调用方应使用 KB 内置的 `guest` 账号（密码 `guest`）连接——它是 token 注册的唯一入口。`guest` 是映射到 `auth.accounts` 的只读账户，可读所有 `app.profiles` 和公开内容表。
 
 Review 术语更新：`LGTM` = “Looks Good To Me”，是普通评审信号；`verified` 是更高标准的认可。`conclusion` 仍是自由文本；review 可更新，最新 conclusion 生效，旧版本进入 `app.review_history`。
 
@@ -117,7 +117,7 @@ python3 skills/agent-kb-postgres-admin/scripts/manage_registration_token.py revo
 - 原子消费，避免并发重复使用超额创建账号
 - 所有成功注册都只会得到 `normal_user`
 
-推荐同时准备一个专用 registration login（未映射到 `auth.accounts`），给尚未拥有 KB 账号的调用方使用；它只需要能连库并调用 `auth.register_with_token(...)`，不承担普通内容读写职责。
+注册入口是内置的 `guest` 账号（`AGENT_KB_DATABASE_URL=postgres://guest:guest@...`），它是 token 注册的唯一允许调用方。
 
 ### 权限模型概览
 

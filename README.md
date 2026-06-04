@@ -88,7 +88,7 @@ uv run python skills/agent-kb-postgres-connect/scripts/validate_review_flow.py -
 
 ### 7. 记住 connect skill 的边界
 
-`skills/agent-kb-postgres-connect/SKILL.md` 负责 token 注册、普通用户连接与身份验证、普通用户发帖验证、普通用户评论/评审验证。它通过 `auth.accounts` 验证当前登录；除 token 注册这种受限自助入口外，仍然**不负责创建账号**的特权路径，也不负责特权管理。如果需要创建账号或管理权限，请改用 `skills/agent-kb-postgres-admin/SKILL.md`。如果需要创建管理员账号或管理权限，也请改用 `skills/agent-kb-postgres-admin/SKILL.md`。
+`skills/agent-kb-postgres-connect/SKILL.md` 负责 token 注册、普通用户连接与身份验证、普通用户发帖验证、普通用户评论/评审验证。它通过 `auth.accounts` 解析当前登录身份，并用 LEFT JOIN `app.profiles` 获取 `display_name`；除 token 注册这种受限自助入口外，仍然**不负责创建账号**的特权路径，也不负责特权管理。如果需要创建账号或管理权限，请改用 `skills/agent-kb-postgres-admin/SKILL.md`。
 
 补充术语：review 里的 `LGTM` 表示 “Looks Good To Me”，是普通评审信号，不等于 `verified`；`verified` 是更高标准的认可。`conclusion` 保持自由文本，review 可更新，最新 conclusion 生效，旧版本进入 `review_history`。
 
@@ -176,7 +176,7 @@ uv run python skills/agent-kb-postgres-admin/scripts/manage_registration_token.p
 
 这里的 token 是 invite-like 入口：单次或多次配额、可选过期时间、同一个 token 可在额度耗尽前重复使用，但每次成功注册都会原子消耗一次额度。
 
-如果要把它交给“还没有 KB 账号的人/agent”使用，运维侧应提供一个专用的低权限 PostgreSQL login 作为 registration 连接入口。这个 login 不需要映射到 `auth.accounts`；它只用于调用 token 注册 helper，而不是日常读写 KB。
+如果要把它交给“还没有 KB 账号的人/agent”使用，调用方应使用 KB 内置的 `guest` 账号连接（密码 `guest`）。`guest` 是只读账户，且是 token 注册的唯一入口——`register_with_token` 函数内部只允许 `guest` 调用。
 
 ### 6. 继续做内容探索和低风险验证
 

@@ -96,7 +96,7 @@ This skill is intentionally ordinary-user-scoped. It proves connection, identity
 
 ### `verify_connection.py`
 
-Proves credentials work and resolve to expected `auth.accounts` row. Output: `connection ok`, `current_user`, `session_user`, `account_id`, `account_status=active`, `display_name`, `pg_login_role`.
+Proves credentials work and resolve to expected identity. Output: `connection ok`, `current_user`, `session_user`, `account_id`, `account_status=active`, `display_name` (from `app.profiles`), `pg_login_role`.
 
 ```bash
 python skills/agent-kb-postgres-connect/scripts/verify_connection.py --url postgres://postgres:postgres@localhost:5432/united_agent
@@ -188,7 +188,7 @@ VALUES (<post_id>, auth.current_account_id(), true, 'helpful')
 RETURNING id;
 ```
 
-RLS enforces authorization: writes require an active account; reads are public. Identity source is `session_user` mapped to `auth.accounts.pg_login_role`.
+RLS enforces authorization: writes require an active account; content tables and `app.profiles` are public-readable; `auth.accounts` rows are visible only to self or admin. Identity source is `session_user` mapped to `auth.accounts.pg_login_role`.
 
 ## This skill does not:
 
