@@ -1077,3 +1077,36 @@ Added self-service password change for the current login, admin reset-password s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 33: Add token registration flow and LGTM review semantics
+
+**Date**: 2026-06-04
+**Task**: Add token registration flow and LGTM review semantics
+**Branch**: `main`
+
+### Summary
+
+Implemented admin-issued registration tokens for direct normal_user signup, added shipped registration helpers, renamed LFTM to LGTM across schema/docs/tests, and updated the seeded announcement guidance.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c18e867` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
