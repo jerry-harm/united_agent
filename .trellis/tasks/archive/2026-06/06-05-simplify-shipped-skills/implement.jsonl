@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend-only task; load the relevant backend guideline index first."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "The change rewrites the public skill and script surface, so implementation must preserve and intentionally update documented repo layout conventions."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "The new single user skill and two-script surface still rely on PostgreSQL helpers, SQL contracts, and brief RLS guidance."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Implementation must keep Python wrappers thin, keep docs aligned with reality, and update regression tests when script and skill contracts change."}

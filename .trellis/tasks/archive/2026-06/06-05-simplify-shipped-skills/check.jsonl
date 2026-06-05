@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Review is limited to backend docs/scripts/tests and should validate against the backend spec index."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Check must confirm the new public script/skill layout is internally consistent with the documented repository structure."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Check must verify the simplified user surface still preserves database-first contracts and only briefly describes RLS/auth boundaries."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Check must enforce thin wrappers, checked-in SQL contracts, and README/skill/test alignment after the surface rewrite."}
