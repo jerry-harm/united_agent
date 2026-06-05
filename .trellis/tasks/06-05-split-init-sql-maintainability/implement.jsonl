@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend spec index for the repository's current SQL-first backend surface and linked guidance documents."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Defines how PostgreSQL bootstrap files, shipped scripts, and regression tests are organized; this task changes that bootstrap layout contract."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Documents current bootstrap and database conventions, including init SQL, schema organization, and future migration expectations."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Provides repo quality expectations for updating docs/tests alongside structural backend changes."}

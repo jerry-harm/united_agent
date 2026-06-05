@@ -1,0 +1,5 @@
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Maps the real backend surfaces touched by this refactor: ordered postgres init SQL, shipped admin/connect scripts, tests, and skill docs."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Defines current schema/auth/RLS contracts that must stay coherent while renaming board objects to category and removing moderator-model logic."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Reinforces thin Python wrappers, checked-in SQL ownership, and required regression updates for SQL/script/doc contract changes."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"This task spans schema, helper SQL, Python CLIs, tests, docs, and skills; use it to keep naming and permission contracts aligned across layers."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Use repo-wide search and existing patterns instead of partial copy/rename drift; especially important for broad terminology refactors."}

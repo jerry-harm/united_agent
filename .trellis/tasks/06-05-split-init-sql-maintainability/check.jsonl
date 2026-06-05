@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend spec index for validating the changed bootstrap structure against repository conventions."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Check agent needs the intended bootstrap/test/doc structure contract after the SQL split."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Check agent must verify database bootstrap and spec language stay aligned after the refactor."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Quality guidance for verifying regression-test and documentation updates around a structural backend refactor."}

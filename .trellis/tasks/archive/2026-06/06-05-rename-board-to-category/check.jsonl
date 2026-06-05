@@ -1,0 +1,5 @@
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Review must verify renamed files, script entrypoints, SQL helpers, and tests still match the documented backend layout after board/moderator removal."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Review must verify schema/auth/RLS changes still honor database contracts while removing moderator-only paths and renaming board to category."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Review against required regression coverage and against forbidden drift like inline privileged SQL or stale contract text."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Review error strings and policy-violation behavior where admin/moderator flows are removed or renamed so docs/tests stay consistent."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Review cross-layer consistency so renamed identifiers and deleted moderation flows do not leave mismatched contracts between SQL, scripts, docs, and tests."}
