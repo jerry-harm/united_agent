@@ -1242,3 +1242,37 @@ Investigated whether app.profiles FORCE ROW LEVEL SECURITY blocked FK CASCADE du
 ### Next Steps
 
 - None - task complete
+
+
+## Session 38: Finish category rename and attachment boundaries
+
+**Date**: 2026-06-05
+**Task**: Finish category rename and attachment boundaries
+**Branch**: `main`
+
+### Summary
+
+Completed the category-era database function boundary work, reran live PostgreSQL verification to green, and archived the rename plus split-init tasks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9318277` | (see git log) |
+| `8d76f77` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
