@@ -1276,3 +1276,37 @@ Completed the category-era database function boundary work, reran live PostgreSQ
 ### Next Steps
 
 - None - task complete
+
+
+## Session 39: Archive remaining June 5 tasks
+
+**Date**: 2026-06-05
+**Task**: Archive remaining June 5 tasks
+**Branch**: `main`
+
+### Summary
+
+Archived the remaining June 5 Trellis task directories after the attachment/function-boundary work had already been committed and the repo was clean.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9318277` | (see git log) |
+| `8d76f77` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

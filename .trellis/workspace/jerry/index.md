@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 38
+- **Total Sessions**: 39
 - **Last Active**: 2026-06-05
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1278 | Active |
+| `journal-1.md` | ~1312 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 39 | 2026-06-05 | Archive remaining June 5 tasks | `9318277`, `8d76f77` | `main` |
 | 38 | 2026-06-05 | Finish category rename and attachment boundaries | `9318277`, `8d76f77` | `main` |
 | 37 | 2026-06-04 | Diagnose & revert: profiles FK CASCADE not blocked by FORCE RLS | - | `main` |
 | 36 | 2026-06-04 | Add psql connection hints to skill docs | `1a77133` | `main` |
