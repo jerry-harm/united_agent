@@ -12,9 +12,10 @@ class LiveCreatePrincipalDocumentationTest(unittest.TestCase):
         self.assertIn("tests/test_create_principal_live_flows.py", content)
         self.assertIn("uv run python -m unittest tests.test_create_principal_live_flows -v", content)
         self.assertNotIn("python3 -m unittest tests.test_create_principal_live_flows -v", content)
-        self.assertIn("create_principal.py", content)
-        self.assertIn("manage_account.py", content)
-        self.assertIn("manage_global_role.py", content)
+        self.assertIn("call_helper.py", content)
+        self.assertIn("auth.create_account_with_login", content)
+        self.assertIn("auth.disable_managed_account", content)
+        self.assertIn("auth.grant_global_role", content)
 
 
 class LiveCreatePrincipalFlowTest(LivePostgresTestCase):
@@ -79,13 +80,13 @@ class LiveCreatePrincipalFlowTest(LivePostgresTestCase):
         self.assertNotEqual(denied_by_normal_result.returncode, 0)
         self.assertIn("only admin or super_admin may create accounts", denied_by_normal_result.stderr)
 
-        is_admin, is_super_admin, can_write, _, status = self.fetch_role_flags(user=admin_role, password=admin_password)
+        is_admin, is_super_admin, can_write, status = self.fetch_role_flags(user=admin_role, password=admin_password)
         self.assertTrue(is_admin)
         self.assertFalse(is_super_admin)
         self.assertTrue(can_write)
         self.assertEqual(status, "active")
 
-        is_admin, is_super_admin, can_write, _, status = self.fetch_role_flags(
+        is_admin, is_super_admin, can_write, status = self.fetch_role_flags(
             user=normal_actor_role,
             password=normal_actor_password,
         )
@@ -110,7 +111,7 @@ class LiveCreatePrincipalFlowTest(LivePostgresTestCase):
 
         self.set_account_status(admin_role, "disabled")
 
-        is_admin, is_super_admin, can_write, _, status = self.fetch_role_flags(user=admin_role, password=admin_password)
+        is_admin, is_super_admin, can_write, status = self.fetch_role_flags(user=admin_role, password=admin_password)
         self.assertTrue(is_admin)
         self.assertFalse(is_super_admin)
         self.assertFalse(can_write)
@@ -174,7 +175,7 @@ class LiveCreatePrincipalFlowTest(LivePostgresTestCase):
         self.assertNotEqual(denied_admin_grant.returncode, 0)
         self.assertIn("only active super_admin may grant global roles", denied_admin_grant.stderr)
 
-        is_admin, is_super_admin, can_write, _, status = self.fetch_role_flags(user=target_role, password=target_password)
+        is_admin, is_super_admin, can_write, status = self.fetch_role_flags(user=target_role, password=target_password)
         self.assertTrue(is_admin)
         self.assertFalse(is_super_admin)
         self.assertTrue(can_write)
@@ -189,7 +190,7 @@ class LiveCreatePrincipalFlowTest(LivePostgresTestCase):
         )
         self.assertEqual(revoke_result.returncode, 0, revoke_result.stderr)
 
-        is_admin, is_super_admin, can_write, _, status = self.fetch_role_flags(user=target_role, password=target_password)
+        is_admin, is_super_admin, can_write, status = self.fetch_role_flags(user=target_role, password=target_password)
         self.assertFalse(is_admin)
         self.assertFalse(is_super_admin)
         self.assertTrue(can_write)

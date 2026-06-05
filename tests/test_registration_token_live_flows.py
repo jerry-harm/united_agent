@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
-import subprocess
 import unittest
 
 try:
@@ -16,32 +14,24 @@ from tests.live_postgres_helpers import LivePostgresTestCase
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MANAGE_REGISTRATION_TOKEN_SCRIPT = ROOT / "skills/agent-kb-postgres-admin/scripts/manage_registration_token.py"
-REGISTER_WITH_TOKEN_SCRIPT = ROOT / "skills/agent-kb-postgres-connect/scripts/register_with_token.py"
 
 
 class RegistrationTokenLiveFlowTest(LivePostgresTestCase):
     def run_manage_registration_token(
         self,
-        action: str,
         *,
         actor_user: str,
         actor_password: str,
+        token: str,
         max_uses: int | None = None,
         expires_at: str | None = None,
-        token_id: int | None = None,
         check: bool = False,
-    ) -> subprocess.CompletedProcess[str]:
-        args = [action]
-        if max_uses is not None:
-            args.extend(["--max-uses", str(max_uses)])
-        if expires_at is not None:
-            args.extend(["--expires-at", expires_at])
-        if token_id is not None:
-            args.extend(["--token-id", str(token_id)])
-        return self.run_python_script(
-            MANAGE_REGISTRATION_TOKEN_SCRIPT,
-            args,
+    ):
+        helper_args = [token, str(max_uses if max_uses is not None else 1)]
+        helper_args.append(expires_at if expires_at is not None else "json:null")
+        return self.run_helper_script(
+            "auth.issue_registration_token",
+            helper_args,
             user=actor_user,
             password=actor_password,
             check=check,
@@ -56,50 +46,26 @@ class RegistrationTokenLiveFlowTest(LivePostgresTestCase):
         login_role: str,
         password: str,
         display_name: str,
-    ) -> subprocess.CompletedProcess[str]:
-        env = os.environ.copy()
-        env["AGENT_KB_DATABASE_URL"] = (
-            f"postgres://{db_user}:{db_password}"
-            f"@{self.env['AGENT_KB_DB_HOST']}:{self.env['AGENT_KB_DB_PORT']}"
-            f"/{self.env['AGENT_KB_DB_NAME']}"
+    ):
+        self.created_roles.add(login_role)
+        return self.run_helper_script(
+            "auth.register_with_token",
+            [token, "human", display_name, login_role, "env:AGENT_KB_NEW_PASSWORD"],
+            user=db_user,
+            password=db_password,
+            extra_env={"AGENT_KB_NEW_PASSWORD": password},
         )
-        env["AGENT_KB_NEW_PASSWORD"] = password
-        return subprocess.run(
-            [
-                "python3",
-                str(REGISTER_WITH_TOKEN_SCRIPT),
-                "--token",
-                token,
-                "--display-name",
-                display_name,
-                "--login-role",
-                login_role,
-                "--new-password-env",
-                "AGENT_KB_NEW_PASSWORD",
-            ],
-            cwd=ROOT,
-            env=env,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-
-    def extract_token(self, stdout: str) -> str:
-        for line in stdout.splitlines():
-            if line.startswith("token="):
-                return line.split("=", 1)[1].strip()
-        self.fail(f"token= line missing from output: {stdout}")
 
     def test_admin_can_issue_token_and_register_up_to_quota(self) -> None:
         result = self.run_manage_registration_token(
-            "create",
             actor_user="postgres",
             actor_password="postgres",
+            token=f"token_{self.suffix}",
             max_uses=2,
             check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        token = self.extract_token(result.stdout)
+        token = f"token_{self.suffix}"
 
         login_role_one = self.make_login_role("reg1")
         login_role_two = self.make_login_role("reg2")
@@ -114,7 +80,8 @@ class RegistrationTokenLiveFlowTest(LivePostgresTestCase):
             display_name="Registration User One",
         )
         self.assertEqual(register_one.returncode, 0, register_one.stderr)
-        self.assertIn("registration ok", register_one.stdout)
+        self.assertIn("display_name", register_one.stdout)
+        self.assertIn("Registration User One", register_one.stdout)
 
         register_two = self.run_register_with_token(
             db_user="guest",
@@ -151,14 +118,14 @@ class RegistrationTokenLiveFlowTest(LivePostgresTestCase):
         )
 
         result = self.run_manage_registration_token(
-            "create",
             actor_user=normal_user,
             actor_password=f"pw_{self.suffix}",
+            token=f"denied_{self.suffix}",
             max_uses=1,
             check=False,
         )
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("only active admin or super_admin may create registration tokens", result.stderr)
+        self.assertIn("only admin or super_admin may create registration tokens", result.stderr)
 
 
 if __name__ == "__main__":

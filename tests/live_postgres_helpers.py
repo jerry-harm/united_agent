@@ -15,9 +15,8 @@ except ModuleNotFoundError:  # pragma: no cover - environment-dependent
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CREATE_PRINCIPAL_SCRIPT = ROOT / "skills/agent-kb-postgres-admin/scripts/create_principal.py"
-MANAGE_ACCOUNT_SCRIPT = ROOT / "skills/agent-kb-postgres-admin/scripts/manage_account.py"
-MANAGE_GLOBAL_ROLE_SCRIPT = ROOT / "skills/agent-kb-postgres-admin/scripts/manage_global_role.py"
+USER_HELPER_SCRIPT = ROOT / "skills/agent-kb-postgres-user/scripts/call_helper.py"
+USER_SQL_SCRIPT = ROOT / "skills/agent-kb-postgres-user/scripts/run_sql.py"
 
 
 def live_db_env() -> dict[str, str]:
@@ -235,9 +234,12 @@ class LivePostgresTestCase(unittest.TestCase):
         user: str,
         password: str,
         check: bool = False,
+        extra_env: dict[str, str] | None = None,
     ) -> subprocess.CompletedProcess[str]:
         db_url = f"postgres://{user}:{password}@{self.env['AGENT_KB_DB_HOST']}:{self.env['AGENT_KB_DB_PORT']}/{self.env['AGENT_KB_DB_NAME']}"
         env = self.env | {"AGENT_KB_DATABASE_URL": db_url}
+        if extra_env:
+            env |= extra_env
         return subprocess.run(
             ["uv", "run", "python", str(script_path), *args],
             cwd=ROOT,
@@ -245,6 +247,44 @@ class LivePostgresTestCase(unittest.TestCase):
             check=check,
             capture_output=True,
             text=True,
+        )
+
+    def run_helper_script(
+        self,
+        helper_name: str,
+        helper_args: list[str],
+        *,
+        user: str,
+        password: str,
+        check: bool = False,
+        extra_env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        args = ["--helper", helper_name]
+        for value in helper_args:
+            args.extend(["--arg", value])
+        return self.run_python_script(
+            USER_HELPER_SCRIPT,
+            args,
+            user=user,
+            password=password,
+            check=check,
+            extra_env=extra_env,
+        )
+
+    def run_sql_script(
+        self,
+        sql_text: str,
+        *,
+        user: str,
+        password: str,
+        check: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
+        return self.run_python_script(
+            USER_SQL_SCRIPT,
+            ["--sql", sql_text],
+            user=user,
+            password=password,
+            check=check,
         )
 
     def run_create_principal(
@@ -260,19 +300,14 @@ class LivePostgresTestCase(unittest.TestCase):
         check: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         self.created_roles.add(login_role)
-        return self.run_python_script(
-            CREATE_PRINCIPAL_SCRIPT,
+        return self.run_helper_script(
+            "auth.create_account_with_login",
             [
-                "--principal-type",
                 principal_type,
-                "--display-name",
                 display_name,
-                "--global-role",
-                global_role,
-                "--login-role",
                 login_role,
-                "--new-password",
                 new_password,
+                global_role,
             ],
             user=actor_user,
             password=actor_password,
@@ -289,14 +324,28 @@ class LivePostgresTestCase(unittest.TestCase):
         actor_user: str,
         actor_password: str,
         account_id: int,
+        new_password: str | None = None,
         check: bool = False,
     ) -> subprocess.CompletedProcess[str]:
-        return self.run_python_script(
-            MANAGE_ACCOUNT_SCRIPT,
-            [action, "--account-id", str(account_id)],
+        helper_name = {
+            "disable": "auth.disable_managed_account",
+            "delete": "auth.delete_managed_account",
+            "reset-password": "auth.reset_managed_account_password",
+        }[action]
+        helper_args = [str(account_id)]
+        extra_env = None
+        if action == "reset-password":
+            if new_password is None:
+                raise AssertionError("new_password is required for reset-password")
+            extra_env = {"AGENT_KB_TARGET_PASSWORD": new_password}
+            helper_args.append("env:AGENT_KB_TARGET_PASSWORD")
+        return self.run_helper_script(
+            helper_name,
+            helper_args,
             user=actor_user,
             password=actor_password,
             check=check,
+            extra_env=extra_env,
         )
 
     def run_manage_global_role(
@@ -309,13 +358,18 @@ class LivePostgresTestCase(unittest.TestCase):
         role_name: str | None = None,
         check: bool = False,
     ) -> subprocess.CompletedProcess[str]:
-        args = [action]
+        helper_name = {
+            "grant": "auth.grant_global_role",
+            "revoke": "auth.revoke_global_role",
+            "list": "auth.current_account_id",
+        }[action]
+        args: list[str] = []
         if account_id is not None:
-            args.extend(["--account-id", str(account_id)])
+            args.append(str(account_id))
         if role_name is not None:
-            args.extend(["--role-name", role_name])
-        return self.run_python_script(
-            MANAGE_GLOBAL_ROLE_SCRIPT,
+            args.append(role_name)
+        return self.run_helper_script(
+            helper_name,
             args,
             user=actor_user,
             password=actor_password,

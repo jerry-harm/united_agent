@@ -122,7 +122,7 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             "p_content_text text",
             "content_sha256 = encode(digest(p_content_text, 'sha256'), 'hex')",
             "INSERT INTO app.file_blobs (mime_type, content_text, content_sha256)",
-            "ON CONFLICT (content_sha256) DO UPDATE",
+            "ON CONFLICT ON CONSTRAINT file_blobs_content_sha256_key DO UPDATE",
             "RETURNING id",
             "CREATE FUNCTION app.create_post(",
             "IF NOT auth.can_write() THEN",
@@ -131,12 +131,12 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             "CREATE FUNCTION app.create_post_with_attachments(",
             "p_attachments jsonb DEFAULT '[]'::jsonb",
             "jsonb_array_elements(coalesce(p_attachments, '[]'::jsonb)) WITH ORDINALITY",
-            "attachment->>'kind'",
-            "IF attachment->>'kind' NOT IN ('new', 'existing') THEN",
-            "IF attachment->>'kind' = 'new' THEN",
-            "file_blob_id := app.ensure_file_blob(",
-            "ELSE\n      file_blob_id := (attachment->>'file_blob_id')::bigint;",
-            "(attachment->>'file_blob_id')::bigint",
+            "v_attachment->>'kind'",
+            "IF v_attachment->>'kind' NOT IN ('new', 'existing') THEN",
+            "IF v_attachment->>'kind' = 'new' THEN",
+            "v_file_blob_id := app.ensure_file_blob(",
+            "ELSE\n      v_file_blob_id := (v_attachment->>'file_blob_id')::bigint;",
+            "(v_attachment->>'file_blob_id')::bigint",
             "INSERT INTO app.post_attachments (post_id, file_blob_id, position)",
             "ordinality - 1",
             "CREATE FUNCTION app.create_review_entry(",
@@ -333,35 +333,29 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
         self.assertFalse((ROOT / "postgres/init/001-agent-knowledge-base.sql").exists())
         self.assertFalse((ROOT / "postgres/init/001-united-agent.sql").exists())
 
-    def test_bootstrap_skill_documents_connection_flow(self) -> None:
-        content = self.read_text("skills/agent-kb-postgres-connect/SKILL.md")
+    def test_bootstrap_skill_documents_single_user_skill_surface(self) -> None:
+        content = self.read_text("skills/agent-kb-postgres-user/SKILL.md")
 
-        self.assertIn("name: agent-kb-postgres-connect", content)
+        self.assertIn("name: agent-kb-postgres-user", content)
         self.assertIn("compatibility:", content)
         self.assertIn("psycopg", content)
-        self.assertIn('uv sync', content)
-        self.assertIn('uv run python skills/agent-kb-postgres-connect/scripts/verify_connection.py', content)
-        self.assertIn("ordinary-user connection and identity-verification path", content)
-        self.assertIn("This skill does not:", content)
-        self.assertIn("create accounts", content)
-        self.assertIn("grant or revoke roles", content)
-        self.assertIn('uv run python skills/agent-kb-postgres-connect/scripts/verify_connection.py', content)
-        self.assertIn('uv run python skills/agent-kb-postgres-connect/scripts/list_content.py --list-categories', content)
-        self.assertIn('uv run python skills/agent-kb-postgres-connect/scripts/validate_post_flow.py', content)
-        self.assertIn('uv run python skills/agent-kb-postgres-connect/scripts/validate_review_flow.py', content)
-        self.assertIn("skills/agent-kb-postgres-connect/scripts/verify_connection.py", content)
-        self.assertIn("connection ok", content)
+        self.assertIn("uv sync", content)
+        self.assertIn("call_helper.py", content)
+        self.assertIn("run_sql.py", content)
+        self.assertIn("helper usage", content)
+        self.assertIn("custom SQL usage", content)
+        self.assertIn("auth.register_with_token", content)
+        self.assertIn("auth.create_account_with_login", content)
+        self.assertIn("app.create_post", content)
+        self.assertIn("app.create_review_entry", content)
         self.assertIn("AGENT_KB_DATABASE_URL", content)
-        self.assertIn("auth.accounts", content)
-        self.assertIn("united_agent", content)
-        self.assertIn("hello category", content)
-        self.assertIn("<HELLO_POST_ID>", content)
-        self.assertIn("low-stakes testing", content)
-        self.assertNotIn("python3 - <<'PY'", content)
-        self.assertNotIn("python3 scripts/verify_connection.py", content)
-        self.assertNotIn("psql postgresql://", content)
-        self.assertNotIn("auth.create_account_login(", content)
-        self.assertNotIn("validate_review_flow.py --post-id 1", content)
+        self.assertIn("announcement", content)
+        self.assertIn("verified", content)
+        self.assertIn("hello", content)
+        self.assertNotIn("agent-kb-postgres-connect", content)
+        self.assertNotIn("agent-kb-postgres-admin", content)
+        self.assertNotIn("verify_connection.py", content)
+        self.assertNotIn("create_principal.py", content)
 
 
 if __name__ == "__main__":

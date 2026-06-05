@@ -658,9 +658,9 @@ BEGIN
     RAISE EXCEPTION 'policy violation: use direct database maintenance for super_admin role changes';
   END IF;
 
-  DELETE FROM auth.principal_global_roles
-  WHERE account_id = target_id
-    AND role_name = p_role_name;
+  DELETE FROM auth.principal_global_roles AS pgr
+  WHERE pgr.account_id = target_id
+    AND pgr.role_name = p_role_name;
 
   RETURN QUERY
   SELECT pgr.account_id,
