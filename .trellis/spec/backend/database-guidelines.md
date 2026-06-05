@@ -78,68 +78,62 @@ SELECT id FROM auth.accounts WHERE pg_login_role = session_user;
 
 ---
 
-## Scenario: SQL-file-backed admin helpers
+## Scenario: Generic user-facing helper and SQL runners
 
 ### 1. Scope / Trigger
 - Trigger: privileged account creation, account management, global-role management, and registration-token management are implemented as shipped skill-bundled helpers, and those helpers must stay cross-platform while enforcing policy from the live PostgreSQL session.
 
 ### 2. Signatures
 - Python entrypoints:
-  - `uv run python skills/agent-kb-postgres-admin/scripts/create_principal.py --principal-type <human|agent> --display-name <text> --global-role <normal_user|admin> --login-role <pg_role> [--new-password <password>]`
-  - `uv run python skills/agent-kb-postgres-admin/scripts/manage_account.py <disable|delete|reset-password> --account-id <id> [--new-password-env <ENV_NAME>]`
-  - `uv run python skills/agent-kb-postgres-admin/scripts/manage_global_role.py <grant|revoke|list> [--account-id <id> --role <normal_user|admin>]`
-  - `uv run python skills/agent-kb-postgres-admin/scripts/manage_registration_token.py <create|revoke|list> [--token <text> --account-id <id>]`
-- SQL files executed by those entrypoints:
-  - `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql`
-  - `skills/agent-kb-postgres-admin/scripts/sql/manage_account_disable.sql`
-  - `skills/agent-kb-postgres-admin/scripts/sql/manage_account_delete.sql`
-  - `skills/agent-kb-postgres-admin/scripts/sql/manage_account_reset_password.sql`
-  - `skills/agent-kb-postgres-admin/scripts/sql/manage_global_role_grant.sql`
-  - `skills/agent-kb-postgres-admin/scripts/sql/manage_global_role_revoke.sql`
-  - `skills/agent-kb-postgres-admin/scripts/sql/manage_global_role_list.sql`
-  - `skills/agent-kb-postgres-admin/scripts/sql/manage_registration_token_create.sql`
-  - `skills/agent-kb-postgres-admin/scripts/sql/manage_registration_token_revoke.sql`
-  - `skills/agent-kb-postgres-admin/scripts/sql/manage_registration_token_list.sql`
+  - `uv run python skills/agent-kb-postgres-user/scripts/call_helper.py --helper <schema.function> [--arg <value> ...]`
+  - `uv run python skills/agent-kb-postgres-user/scripts/run_sql.py (--sql <query> | --file <path>) [--var <name=value> ...]`
+- Representative helper calls:
+  - `uv run python skills/agent-kb-postgres-user/scripts/call_helper.py --helper auth.create_account_with_login --arg <principal_type> --arg <display_name> --arg <login_role> --arg env:AGENT_KB_NEW_PRINCIPAL_PASSWORD --arg <global_role>`
+  - `uv run python skills/agent-kb-postgres-user/scripts/call_helper.py --helper auth.disable_managed_account --arg <account_id>`
+  - `uv run python skills/agent-kb-postgres-user/scripts/call_helper.py --helper auth.delete_managed_account --arg <account_id>`
+  - `uv run python skills/agent-kb-postgres-user/scripts/call_helper.py --helper auth.reset_managed_account_password --arg <account_id> --arg env:<ENV_NAME>`
+  - `uv run python skills/agent-kb-postgres-user/scripts/call_helper.py --helper auth.grant_global_role --arg <account_id> --arg <role>`
+  - `uv run python skills/agent-kb-postgres-user/scripts/call_helper.py --helper auth.revoke_global_role --arg <account_id> --arg <role>`
+  - `uv run python skills/agent-kb-postgres-user/scripts/call_helper.py --helper auth.issue_registration_token --arg <token> --arg <max_uses> --arg json:<expires_at_or_null>`
 
 ### 3. Contracts
 - Required environment keys:
   - `AGENT_KB_DATABASE_URL`
 - Optional environment keys:
-  - `AGENT_KB_NEW_PRINCIPAL_PASSWORD` (used by `create_principal.py`)
+  - `AGENT_KB_NEW_PRINCIPAL_PASSWORD` (used when calling account-creation helpers)
 - Runtime dependency:
   - Run shipped Python entrypoints through `uv run python ...` from the repo root so the repo-managed environment is used consistently.
 - Execution contract:
-  - Python wrappers must read the checked-in SQL file and execute it through `psycopg`.
-  - Shipped entrypoints must resolve their SQL from the same skill directory so installing the skill does not depend on repo-root maintenance files.
-  - SQL files should keep placeholder tokens in the `{{name}}` form so the Python wrapper can render safe SQL literals before execution.
-  - Helper SQL must derive actor privilege from `auth` helper functions and grant tables inside the database.
-  - Helpers must not accept or trust a user-supplied actor-role override.
-  - If a helper SQL file uses a side-effecting CTE, the final statement must consume that CTE so PostgreSQL cannot skip the side effect during execution.
+  - `call_helper.py` must stay thin: parse args, resolve the target function signature, and execute `SELECT * FROM schema.function(...)` through `psycopg`.
+  - `run_sql.py` must execute either an inline SQL string or a checked-in `.sql` file through `psycopg`.
+  - `run_sql.py` templating should keep placeholder tokens in the `{{name}}` form so the runner can render safe SQL literals before execution.
+  - Database helpers remain the real privilege boundary; the generic runners must not accept or trust a user-supplied actor-role override.
+  - If a helper or SQL file uses a side-effecting CTE, the final statement must consume that CTE so PostgreSQL cannot skip the side effect during execution.
 
 ### 4. Validation & Error Matrix
 - missing required DB env var -> exit with `missing required environment variable: AGENT_KB_DATABASE_URL`
-- invalid `--login-role` format -> exit with `login role must match PostgreSQL role naming rules`
-- missing principal password -> exit with `provide --new-password or set AGENT_KB_NEW_PRINCIPAL_PASSWORD`
+- helper name not in `schema.function` form -> exit with `helper name must look like schema.function`
+- helper arity not found -> exit with `helper not found for arity: <schema.function>/<count>`
+- missing principal password -> downstream helper raises or returns the existing password validation failure
 - `admin` creating anything except `normal_user` -> raise `policy violation: admin may create only normal_user accounts`
 - non-admin session attempting account, role, or token management -> raise the corresponding policy-violation error from helper SQL
 - helper action targeting an out-of-scope account -> raise policy violation from `auth.can_manage_account(...)` or the global-role/token helper boundary
 - unauthorized `UPDATE` against an RLS-protected row may affect zero visible rows instead of raising a PostgreSQL error, depending on whether the denial happens through row filtering in `USING` versus a failing `WITH CHECK`
 
 ### 5. Good/Base/Bad Cases
- - Good: `uv run python skills/agent-kb-postgres-admin/scripts/create_principal.py --principal-type human --display-name "Example User" --global-role normal_user --login-role example_user` from an `admin` session with `AGENT_KB_NEW_PRINCIPAL_PASSWORD` set.
-- Good: shipped operator guidance points only at the skill-bundled Python and SQL files under `skills/agent-kb-postgres-admin/scripts/`.
- - Base: `uv run python skills/agent-kb-postgres-admin/scripts/manage_global_role.py list` from a `super_admin` session to inspect current grants.
+ - Good: `uv run python skills/agent-kb-postgres-user/scripts/call_helper.py --helper auth.create_account_with_login --arg human --arg "Example User" --arg example_user --arg env:AGENT_KB_NEW_PRINCIPAL_PASSWORD --arg normal_user` from an `admin` session.
+- Good: shipped operator guidance points only at the one user skill and its two generic Python entrypoints.
+ - Base: `uv run python skills/agent-kb-postgres-user/scripts/run_sql.py --sql "SELECT * FROM auth.principal_global_roles ORDER BY account_id, role_name;"` from a `super_admin` session to inspect current grants.
 - Bad: embedding privileged SQL directly inside Python strings and branching on a user-provided `--actor-role` flag.
 
 ### 6. Tests Required
 - Static tooling test must prove:
-  - the shipped Python entrypoints exist
-  - the shipped SQL files exist
+  - the shipped user-skill entrypoints exist
   - the shared runner requires `AGENT_KB_DATABASE_URL`
-  - the shared runner imports `psycopg`, reads SQL files from disk, and executes them through a cursor
-  - account creation SQL targets `auth.accounts` and `auth.principal_global_roles`
-  - account creation SQL consumes the login-creation CTE so `auth.create_account_login(...)` cannot be optimized away
-  - account / role / token helper SQL files stay shipped under the skill-local `scripts/sql/` tree
+  - the shared runner imports `psycopg`, resolves helper signatures, and executes SQL through a cursor
+  - `run_sql.py` supports inline SQL plus checked-in `.sql` files
+  - account-creation helpers still target `auth.accounts` and `auth.principal_global_roles`
+  - helper and SQL runners stay shipped under the skill-local `scripts/` tree
 - Live integration coverage should prove:
   - a `normal_user` does not resolve as `admin` / `super_admin`
   - `normal_user` cannot create categories or write global-role / account-management changes directly
@@ -155,9 +149,9 @@ cursor.execute(inline_sql_with_actor_role_flag)
 #### Correct
 ```python
 with psycopg.connect(...) as connection:
-    rendered_sql = render_sql(connection, sql_path.read_text(encoding="utf-8"), variables)
+    query = sql.SQL("SELECT * FROM {}.{}({})").format(...)
     with connection.cursor() as cursor:
-        cursor.execute(rendered_sql)
+        cursor.execute(query, values)
 ```
 
 ---
@@ -172,8 +166,8 @@ with psycopg.connect(...) as connection:
   - `auth.change_own_password(p_new_password text) returns text`
   - `auth.reset_managed_account_password(p_target_account_id bigint, p_new_password text) returns text`
 - Python entrypoints:
-  - `uv run python skills/agent-kb-postgres-connect/scripts/change_password.py --new-password-env <ENV_NAME>`
-  - `uv run python skills/agent-kb-postgres-admin/scripts/manage_account.py reset-password --account-id <id> --new-password-env <ENV_NAME>`
+  - `uv run python skills/agent-kb-postgres-user/scripts/call_helper.py --helper auth.change_own_password --arg env:<ENV_NAME>`
+  - `uv run python skills/agent-kb-postgres-user/scripts/call_helper.py --helper auth.reset_managed_account_password --arg <id> --arg env:<ENV_NAME>`
 
 ### 3. Contracts
 - Password state continues to live only in PostgreSQL login roles; do not introduce an app-level password table.
@@ -205,10 +199,9 @@ with psycopg.connect(...) as connection:
 
 ### 6. Tests Required
 - Static tooling tests must prove:
-  - the new connect entrypoint exists
-  - `manage_account.py` exposes `reset-password`
-  - the admin reset SQL file exists
-  - both wrappers require explicit `--new-password-env`
+  - the helper runner exists
+  - password changes and resets are documented through `call_helper.py`
+  - env-based secret passing remains explicit in docs/examples
   - no fixed fallback env names are documented for password change/reset
 - Static schema tests must prove:
   - `auth.change_own_password(...)` exists
@@ -218,12 +211,12 @@ with psycopg.connect(...) as connection:
 ### 7. Wrong vs Correct
 #### Wrong
 ```bash
-uv run python skills/agent-kb-postgres-connect/scripts/change_password.py --new-password hunter2
+uv run python skills/agent-kb-postgres-user/scripts/call_helper.py --helper auth.change_own_password --arg hunter2
 ```
 
 #### Correct
 ```bash
-uv run python skills/agent-kb-postgres-connect/scripts/change_password.py --new-password-env AGENT_KB_NEW_PASSWORD
+uv run python skills/agent-kb-postgres-user/scripts/call_helper.py --helper auth.change_own_password --arg env:AGENT_KB_NEW_PASSWORD
 ```
 
 ---
@@ -568,34 +561,32 @@ GRANT UPDATE (verification) ON app.posts TO united_agent_user;
 
 ---
 
-## Scenario: Ordinary-user connect verification helper
+## Scenario: Ordinary-user verification and content flows through generic runners
 
 ### 1. Scope / Trigger
 - Trigger: the distributed `agent-kb-postgres-connect` skill now ships a reusable Python helper for ordinary-user connection and identity verification.
 
 ### 2. Signatures
 - Python entrypoints:
-  - `uv run python skills/agent-kb-postgres-connect/scripts/verify_connection.py`
-  - `uv run python skills/agent-kb-postgres-connect/scripts/validate_post_flow.py`
-  - `uv run python skills/agent-kb-postgres-connect/scripts/validate_review_flow.py`
+  - `uv run python skills/agent-kb-postgres-user/scripts/run_sql.py --sql "SELECT current_user, session_user, auth.current_account_id(), auth.current_account_status();"`
+  - `uv run python skills/agent-kb-postgres-user/scripts/call_helper.py --helper app.create_post --arg <category_id> --arg <content_type> --arg <title> --arg <body> --arg json:null`
+  - `uv run python skills/agent-kb-postgres-user/scripts/call_helper.py --helper app.create_review_entry --arg <post_id> --arg json:<lgtm> --arg <conclusion>`
 - Skill-bundled files:
-  - `skills/agent-kb-postgres-connect/scripts/verify_connection.py`
-  - `skills/agent-kb-postgres-connect/scripts/validate_post_flow.py`
-  - `skills/agent-kb-postgres-connect/scripts/validate_review_flow.py`
-  - `skills/agent-kb-postgres-connect/scripts/_postgres_connect_common.py`
+  - `skills/agent-kb-postgres-user/scripts/call_helper.py`
+  - `skills/agent-kb-postgres-user/scripts/run_sql.py`
+  - `skills/agent-kb-postgres-user/scripts/_agent_kb_user_common.py`
 
 ### 3. Contracts
 - Connection: `AGENT_KB_DATABASE_URL` env var or `--url` flag. If both present, `--url` wins.
-- Scripts must expose `--url` argument (optional) and use it to connect; if neither `--url` nor `AGENT_KB_DATABASE_URL` is provided, fail with a clear error message.
+- Both generic runners must expose `--url` and use it to connect; if neither `--url` nor `AGENT_KB_DATABASE_URL` is provided, fail with a clear error message.
 - Runtime dependency:
   - Run shipped Python entrypoints through `uv run python ...` from the repo root so the repo-managed environment is used consistently.
 - Execution contract:
-  - The helper connects with the provided login credentials.
-  - `verify_connection.py` must verify `current_user`, `session_user`, `auth.current_account_id()`, `auth.current_account_status()`, `display_name` (from `app.profiles` via LEFT JOIN), and `pg_login_role` from the mapped `auth.accounts` row.
-  - `validate_post_flow.py` must stay ordinary-user-scoped and validate create/list behavior for posts without privileged role mutation.
-  - `validate_review_flow.py` must stay ordinary-user-scoped and validate comment/review creation paths without privileged role mutation.
+  - The runners connect with the provided login credentials.
+  - Verification is now a SQL-based flow: operators query `current_user`, `session_user`, `auth.current_account_id()`, `auth.current_account_status()`, plus any desired joined profile/account fields.
+  - Content validation stays ordinary-user-scoped but now goes through direct helper calls such as `app.create_post(...)` and `app.create_review_entry(...)`.
   - Identity resolution must remain based on `session_user`.
-- The helper stays ordinary-user-only and must not create accounts, grant roles, or perform admin-only management actions.
+- Ordinary-user reads/writes still rely on the same PostgreSQL helper and RLS boundaries; the public surface just no longer splits them into many task-specific scripts.
 
 ### 4. Validation & Error Matrix
 - no mapped `auth.accounts` row -> exit with `login resolved to no auth.accounts row`
@@ -613,30 +604,27 @@ GRANT UPDATE (verification) ON app.posts TO united_agent_user;
 
 ### 6. Tests Required
 - Static tooling test must prove:
-  - the bundled helper files exist
-  - the helper uses the skill-local common module
-  - the identity helper checks `session_user`, `auth.current_account_id()`, and `auth.current_account_status()`
-  - the post/review flow entrypoints exist and are documented from the shipped skill/README surface
+  - the bundled generic runner files exist
+  - the runners use the skill-local common module
+  - the docs teach SQL-based identity verification with `session_user`, `auth.current_account_id()`, and `auth.current_account_status()`
+  - the docs teach helper-based post/review flows from the shipped skill/README surface
   - the skill and README use `uv run python ...` consistently for shipped Python entrypoints
 - Live integration coverage should prove:
-  - a mapped active login succeeds and prints resolved identity info
-  - an unmapped login fails clearly
-  - a disabled mapped account fails clearly
-  - an ordinary user can exercise the shipped post and review/comment validation flows
+  - a mapped active login succeeds through the documented SQL verification flow
+  - an ordinary user can exercise the shipped post and review/comment helper flows
 
 ### 7. Wrong vs Correct
 #### Wrong
 ```bash
-uv run python - <<'PY'
-# long inline connect/post/review flow copied out of the skill body
-PY
+uv run python skills/agent-kb-postgres-user/scripts/call_helper.py --helper verify_connection
 ```
 
 #### Correct
 ```bash
-uv run python skills/agent-kb-postgres-connect/scripts/verify_connection.py
-uv run python skills/agent-kb-postgres-connect/scripts/validate_post_flow.py
-uv run python skills/agent-kb-postgres-connect/scripts/validate_review_flow.py
+uv run python skills/agent-kb-postgres-user/scripts/run_sql.py \
+  --sql "SELECT current_user, session_user, auth.current_account_id(), auth.current_account_status();"
+uv run python skills/agent-kb-postgres-user/scripts/call_helper.py --helper app.create_post --arg 1 --arg text/plain --arg Title --arg Body --arg json:null
+uv run python skills/agent-kb-postgres-user/scripts/call_helper.py --helper app.create_review_entry --arg 1 --arg json:false --arg helpful
 ```
 
 ---

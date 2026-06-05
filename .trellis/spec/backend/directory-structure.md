@@ -36,32 +36,18 @@ pyproject.toml
 tests/
 ├── test_agent_kb_postgres_skeleton.py
 ├── test_category_post_live_flows.py
-├── test_postgres_admin_tooling.py
-├── test_postgres_connect_tooling.py
-└── test_connect_skill_live_flows.py
+├── test_create_principal_live_flows.py
+├── test_postgres_user_tooling.py
+├── test_registration_token_live_flows.py
+└── test_user_skill_live_flows.py
 
 skills/
-├── agent-kb-postgres-connect/
+├── agent-kb-postgres-user/
 │   ├── SKILL.md
 │   └── scripts/
-│       ├── _postgres_connect_common.py
-│       ├── validate_post_flow.py
-│       ├── validate_review_flow.py
-│       └── verify_connection.py
-├── agent-kb-postgres-admin/
-│   ├── SKILL.md
-│   └── scripts/
-│       ├── _postgres_admin_common.py
-│       ├── create_principal.py
-│       ├── manage_account.py
-│       ├── manage_global_role.py
-│       └── sql/
-│           ├── create_principal.sql
-│           ├── manage_account_delete.sql
-│           ├── manage_account_disable.sql
-│           ├── manage_global_role_grant.sql
-│           ├── manage_global_role_list.sql
-│           └── manage_global_role_revoke.sql
+│       ├── _agent_kb_user_common.py
+│       ├── call_helper.py
+│       └── run_sql.py
 ```
 
 ---
@@ -70,17 +56,12 @@ skills/
 
 - Split PostgreSQL bootstrap into a small set of ordered top-level files under `postgres/init/`, grouped by responsibility (schema, tables, auth functions, app functions/triggers, permissions/RLS, bootstrap/seed).
 - Put repository-wide Python dependency metadata in the repo-root `pyproject.toml` only when it reflects real shipped script/test needs; keep it dependency-only and do not invent a packaged app layout.
-- Put reusable Python connection/env/SQL-rendering helpers inside the shipped skill that owns the workflow, e.g. `skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py`.
-- Put one operator-facing CLI entrypoint per operation family under the relevant skill's `scripts/` directory.
-  - `skills/agent-kb-postgres-admin/scripts/create_principal.py` handles account creation.
-  - `skills/agent-kb-postgres-admin/scripts/manage_account.py` handles account disable/delete lifecycle operations.
-  - `skills/agent-kb-postgres-admin/scripts/manage_global_role.py` handles global-role grant/revoke/list.
-- For ordinary-user distributed verification flows, bundle connection helpers under the connect skill directory rather than relying on inline heredoc snippets in `SKILL.md`.
-  - `skills/agent-kb-postgres-connect/scripts/verify_connection.py` handles connection and identity verification.
-  - `skills/agent-kb-postgres-connect/scripts/validate_post_flow.py` handles ordinary-user post validation.
-  - `skills/agent-kb-postgres-connect/scripts/validate_review_flow.py` handles ordinary-user review/comment validation.
+- Put reusable Python connection/env/SQL-rendering helpers inside the shipped skill that owns the workflow, e.g. `skills/agent-kb-postgres-user/scripts/_agent_kb_user_common.py`.
+- Keep the public operator surface collapsed to two generic CLI entrypoints under the shipped skill's `scripts/` directory.
+  - `skills/agent-kb-postgres-user/scripts/call_helper.py` handles direct helper/function execution by `schema.function` name.
+  - `skills/agent-kb-postgres-user/scripts/run_sql.py` handles ad hoc SQL strings and checked-in `.sql` files.
 - When a shipped skill must remain installable outside the full repo, bundle the exact Python/SQL resources it invokes under that skill's own `scripts/` tree.
-- Put SQL that performs privileged operations in checked-in files under the same shipped skill directory as the invoking Python entrypoint, not inline inside Python strings.
+- Put SQL that performs privileged operations or reusable reads in checked-in files or stable PostgreSQL functions, not inline inside Python strings.
 - Put contract/regression checks in `tests/` and keep them focused on shipped files and behavior.
 
 There are currently **no** HTTP handlers, background workers, or ORM model modules.
@@ -90,9 +71,9 @@ There are currently **no** HTTP handlers, background workers, or ORM model modul
 ## Naming Conventions
 
 - SQL bootstrap files: numeric prefix + responsibility slug, e.g. `001-schema.sql`, `006-bootstrap-and-seed.sql`.
-- Python scripts: snake_case filenames matching the operation, e.g. `create_principal.py`.
-- Shared Python helpers: underscore-prefixed module for internal reuse, e.g. `_postgres_admin_common.py`.
-- SQL helper files: snake_case and action-oriented, e.g. `manage_global_role_grant.sql`.
+- Python scripts: snake_case filenames matching the public role, e.g. `call_helper.py`, `run_sql.py`.
+- Shared Python helpers: underscore-prefixed module for internal reuse, e.g. `_agent_kb_user_common.py`.
+- SQL helper files: snake_case and action-oriented when checked in for reuse, e.g. `list_content_announcements.sql`.
 - Tests: `test_<area>.py` using `unittest.TestCase` classes.
 
 ---
@@ -106,11 +87,8 @@ There are currently **no** HTTP handlers, background workers, or ORM model modul
 - `postgres/init/005-permissions-and-rls.sql` defines grants, column privileges, RLS enablement, and policies.
 - `postgres/init/006-bootstrap-and-seed.sql` provisions bootstrap identities, default categories, and the startup announcement.
 - `pyproject.toml` is a repository-local uv manifest for script/test dependencies, not a declaration of an application server or publishable Python package.
-- `skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py` provides shared env loading, SQL templating, and transaction execution for shipped admin workflows.
-- `skills/agent-kb-postgres-admin/scripts/create_principal.py` is a thin CLI that validates inputs and delegates to `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql`.
-- `skills/agent-kb-postgres-admin/scripts/manage_account.py` delegates account lifecycle changes to checked-in SQL helpers.
-- `skills/agent-kb-postgres-admin/scripts/manage_global_role.py` delegates global-role changes to checked-in SQL helpers.
-- `skills/agent-kb-postgres-connect/scripts/verify_connection.py` is the distributed ordinary-user entrypoint for connection and identity verification.
-- `skills/agent-kb-postgres-connect/scripts/validate_post_flow.py` and `validate_review_flow.py` keep ordinary-user validation flows split into small task-specific scripts.
-- `tests/test_postgres_admin_tooling.py` verifies that Python wrappers still execute checked-in SQL files instead of drifting into ad hoc behavior.
-- `tests/test_postgres_connect_tooling.py` verifies the shipped connect skill, bundled scripts, and README contract stay aligned.
+- `skills/agent-kb-postgres-user/scripts/_agent_kb_user_common.py` provides shared env loading, helper-signature lookup, SQL templating, and transaction execution for the single shipped user skill.
+- `skills/agent-kb-postgres-user/scripts/call_helper.py` is a thin CLI that validates inputs and dispatches directly to a stable PostgreSQL helper/function by `schema.function` name.
+- `skills/agent-kb-postgres-user/scripts/run_sql.py` is the generic query runner for inline SQL and checked-in SQL files.
+- `tests/test_postgres_user_tooling.py` verifies that the one-skill/two-script contract and repo docs stay aligned.
+- `tests/test_user_skill_live_flows.py` verifies the shipped user skill's helper and SQL flows against a live PostgreSQL instance.

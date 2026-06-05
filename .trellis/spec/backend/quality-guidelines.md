@@ -32,7 +32,7 @@ There is no dedicated lint config or type-checker config in the repo yet. Curren
 
 - Keep privileged business rules in SQL and execute them via checked-in files.
 - If the repo uses a root `pyproject.toml` for uv, keep it dependency-only for shipped scripts/tests; do not imply this repo is a packaged Python application unless that becomes true.
-- Reuse the shipped skill-local common helper (for example `skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py`) for env loading, SQL rendering, and transaction execution instead of re-implementing connection code.
+- Reuse the shipped skill-local common helper (for example `skills/agent-kb-postgres-user/scripts/_agent_kb_user_common.py`) for env loading, helper-signature lookup, SQL rendering, and transaction execution instead of re-implementing connection code.
 - Reuse a shared live-test helper module when multiple PostgreSQL integration suites need the same env loading, connection, script-runner, and cleanup behavior.
 - If a shipped skill documents executable helper scripts, bundle those helpers under the skill directory and keep docs/tests aligned with that shipped entrypoint.
 - Run shipped Python scripts and Python-based verification commands through `uv run ...` from the repo root; do not document bare `python3 ...` invocations as the standard path.
@@ -53,7 +53,7 @@ There is no dedicated lint config or type-checker config in the repo yet. Curren
 For current backend changes, run at least:
 
 ```bash
-uv run python -m py_compile skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py skills/agent-kb-postgres-admin/scripts/create_principal.py skills/agent-kb-postgres-admin/scripts/manage_account.py skills/agent-kb-postgres-admin/scripts/manage_global_role.py skills/agent-kb-postgres-admin/scripts/manage_registration_token.py skills/agent-kb-postgres-connect/scripts/_postgres_connect_common.py skills/agent-kb-postgres-connect/scripts/verify_connection.py skills/agent-kb-postgres-connect/scripts/list_content.py skills/agent-kb-postgres-connect/scripts/validate_post_flow.py skills/agent-kb-postgres-connect/scripts/validate_review_flow.py
+uv run python -m py_compile skills/agent-kb-postgres-user/scripts/_agent_kb_user_common.py skills/agent-kb-postgres-user/scripts/call_helper.py skills/agent-kb-postgres-user/scripts/run_sql.py
 uv run python -m unittest discover -s tests -v
 ```
 
