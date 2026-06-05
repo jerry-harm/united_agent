@@ -68,6 +68,7 @@ class LivePostgresTestCase(unittest.TestCase):
         self.created_roles: set[str] = set()
         self.created_board_slugs: set[str] = set()
         self.created_tag_names: set[str] = set()
+        self.created_uploaded_file_ids: set[int] = set()
 
     def tearDown(self) -> None:
         with self.admin_connection(autocommit=True) as connection:
@@ -75,6 +76,7 @@ class LivePostgresTestCase(unittest.TestCase):
                 account_ids = self.account_ids_for_cleanup(cursor)
                 board_ids = self.board_ids_for_cleanup(cursor)
                 tag_ids = self.tag_ids_for_cleanup(cursor)
+                uploaded_file_ids = self.uploaded_file_ids_for_cleanup(cursor, account_ids)
                 post_ids = self.post_ids_for_cleanup(cursor, account_ids, board_ids)
                 review_entry_ids = self.review_entry_ids_for_cleanup(cursor, account_ids, post_ids)
 
@@ -85,6 +87,8 @@ class LivePostgresTestCase(unittest.TestCase):
                     )
                 if review_entry_ids:
                     cursor.execute("DELETE FROM app.review_history WHERE review_entry_id = ANY(%s)", (review_entry_ids,))
+                if uploaded_file_ids:
+                    cursor.execute("DELETE FROM app.uploaded_files WHERE id = ANY(%s)", (uploaded_file_ids,))
                 if review_entry_ids or post_ids or account_ids:
                     cursor.execute(
                         "DELETE FROM app.review_entries WHERE id = ANY(%s) OR post_id = ANY(%s) OR account_id = ANY(%s)",
@@ -146,6 +150,16 @@ class LivePostgresTestCase(unittest.TestCase):
             (board_ids, account_ids),
         )
         return [row[0] for row in cursor.fetchall()]
+
+    def uploaded_file_ids_for_cleanup(self, cursor: psycopg.Cursor, account_ids: list[int]) -> list[int]:
+        ids = sorted(self.created_uploaded_file_ids)
+        if account_ids:
+            cursor.execute(
+                "SELECT id FROM app.uploaded_files WHERE id = ANY(%s) OR uploader_account_id = ANY(%s)",
+                (ids, account_ids),
+            )
+            return [row[0] for row in cursor.fetchall()]
+        return ids
 
     def review_entry_ids_for_cleanup(self, cursor: psycopg.Cursor, account_ids: list[int], post_ids: list[int]) -> list[int]:
         cursor.execute(
@@ -372,6 +386,22 @@ class LivePostgresTestCase(unittest.TestCase):
                 tag_id = cursor.fetchone()[0]
             connection.commit()
         return tag_id
+
+    def create_uploaded_file(self, *, user: str, password: str, filename: str, mime_type: str, content: str) -> int:
+        with self.connection_for(user=user, password=password) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO app.uploaded_files (filename, uploader_account_id, mime_type, content)
+                    VALUES (%s, auth.current_account_id(), %s, %s)
+                    RETURNING id
+                    """,
+                    (filename, mime_type, content),
+                )
+                uploaded_file_id = cursor.fetchone()[0]
+            connection.commit()
+        self.created_uploaded_file_ids.add(uploaded_file_id)
+        return uploaded_file_id
 
     def fetch_account_id(self, login_role: str) -> int:
         with self.admin_connection() as connection:

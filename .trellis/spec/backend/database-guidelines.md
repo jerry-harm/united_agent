@@ -229,6 +229,91 @@ python3 skills/agent-kb-postgres-connect/scripts/change_password.py --new-passwo
 
 ---
 
+## Scenario: Public text-file uploads referenced from posts and reviews
+
+### 1. Scope / Trigger
+- Trigger: the repository now supports database-first text-file uploads that can be referenced from `app.posts.body` and `app.review_entries.conclusion`.
+
+### 2. Signatures
+- Table: `app.uploaded_files`
+  - `id bigserial PRIMARY KEY`
+  - `filename text NOT NULL CHECK (btrim(filename) <> '')`
+  - `uploader_account_id bigint NOT NULL REFERENCES auth.accounts(id) ON DELETE RESTRICT`
+  - `mime_type text NOT NULL CHECK (app.is_allowed_text_upload_mime(mime_type))`
+  - `content text NOT NULL`
+  - `size_bytes integer GENERATED ALWAYS AS (octet_length(convert_to(content, 'UTF8'))) STORED`
+  - `created_at timestamptz NOT NULL DEFAULT now()`
+- Helper functions:
+  - `app.is_allowed_text_upload_mime(p_mime_type text) returns boolean`
+  - `app.file_upload_url(p_file_id bigint) returns text`
+  - `app.parse_uploaded_file_url(p_file_url text) returns bigint`
+- Connect-skill entrypoints:
+  - `python3 skills/agent-kb-postgres-connect/scripts/upload_text_file.py --file <path> --mime-type <mime>`
+  - `python3 skills/agent-kb-postgres-connect/scripts/read_uploaded_file.py (--file-id <id> | --file-url <kb://uploaded-files/...>)`
+
+### 3. Contracts
+- Uploaded file content is stored directly in PostgreSQL as immutable UTF-8 text.
+- The only file-type gate in MVP is MIME allowlisting through `app.is_allowed_text_upload_mime(...)`; do not add extension-based validation to this workflow.
+- Maximum upload size is 10 MB, enforced by the stored `size_bytes` check.
+- Stable file addresses use the format `kb://uploaded-files/<id>`.
+- Post and review/comment content remain plain text fields; they reference one or more file URLs inline rather than owning attachment join rows in this MVP.
+- Read visibility is public via RLS `USING (true)`.
+- Insert is allowed only for active, non-guest authenticated accounts and must bind `uploader_account_id = auth.current_account_id()`.
+- Delete is allowed only for `admin` / `super_admin` through `auth.is_admin()` plus `auth.can_write()`.
+- Admin deletion is not blocked by existing references from posts or reviews; those references simply become invalid after deletion.
+- Connect-skill wrappers must stay thin and read checked-in SQL files through the shared helper.
+
+### 4. Validation & Error Matrix
+- blank filename -> CHECK constraint violation
+- MIME outside allowlist -> CHECK constraint violation from `app.is_allowed_text_upload_mime(...)`
+- file content larger than 10 MB -> CHECK constraint violation on `size_bytes`
+- guest upload attempt -> RLS denial via `NOT auth.is_guest()`
+- disabled account upload attempt -> RLS denial via `auth.can_write()`
+- ordinary user delete attempt -> zero visible rows deleted by RLS
+- malformed `kb://uploaded-files/...` URL -> `app.parse_uploaded_file_url(...)` returns `NULL`
+
+### 5. Good/Base/Bad Cases
+- Good: a normal user uploads `text/plain` content, gets `kb://uploaded-files/<id>`, and references that URL from both a post body and a review conclusion.
+- Good: another ordinary user reads the file through the public read path.
+- Base: an admin deletes an already-referenced uploaded file and the old inline URLs stop resolving.
+- Bad: adding mutable update paths for uploaded-file content.
+- Bad: blocking admin delete because the file is referenced somewhere.
+- Bad: validating file type from extension instead of the schema MIME contract.
+
+### 6. Tests Required
+- Static schema tests must assert:
+  - `app.uploaded_files` exists with the required columns and size check
+  - MIME validation is delegated to `app.is_allowed_text_upload_mime(...)`
+  - URL helper functions exist and use the `kb://uploaded-files/<id>` contract
+  - RLS policies cover public read, authenticated insert, and admin delete
+- Static tooling tests must assert:
+  - the upload/read scripts exist under the connect skill
+  - those scripts use the shared helper and checked-in SQL files
+  - README / skill / developer guide mention the upload/read flow
+- Live integration tests should prove:
+  - normal-user upload succeeds
+  - public read succeeds for another ordinary user
+  - invalid MIME and >10 MB payloads fail
+  - ordinary users cannot delete uploaded files
+  - admin delete succeeds even when a post/review still contains the file URL
+
+### 7. Wrong vs Correct
+#### Wrong
+```sql
+CREATE POLICY uploaded_files_delete_owner ON app.uploaded_files
+  FOR DELETE TO united_agent_user
+  USING (uploader_account_id = auth.current_account_id());
+```
+
+#### Correct
+```sql
+CREATE POLICY uploaded_files_delete_admin ON app.uploaded_files
+  FOR DELETE TO united_agent_user
+  USING (auth.can_write() AND auth.is_admin());
+```
+
+---
+
 ## Scenario: Bootstrap default boards, announcement seed, and ranking views
 
 ### 1. Scope / Trigger

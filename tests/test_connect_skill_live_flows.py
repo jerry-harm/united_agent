@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import subprocess
+import tempfile
 import unittest
 import uuid
 
@@ -18,6 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 VERIFY_CONNECTION_SCRIPT = ROOT / "skills/agent-kb-postgres-connect/scripts/verify_connection.py"
 VALIDATE_POST_FLOW_SCRIPT = ROOT / "skills/agent-kb-postgres-connect/scripts/validate_post_flow.py"
 VALIDATE_REVIEW_FLOW_SCRIPT = ROOT / "skills/agent-kb-postgres-connect/scripts/validate_review_flow.py"
+UPLOAD_TEXT_FILE_SCRIPT = ROOT / "skills/agent-kb-postgres-connect/scripts/upload_text_file.py"
+READ_UPLOADED_FILE_SCRIPT = ROOT / "skills/agent-kb-postgres-connect/scripts/read_uploaded_file.py"
 
 
 def live_db_env() -> dict[str, str]:
@@ -261,6 +264,57 @@ class LiveConnectSkillTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("review flow ok", result.stdout)
         self.assertIn("review entry created", result.stdout)
+
+    def test_upload_and_read_uploaded_file_scripts_report_success_for_normal_user(self) -> None:
+        login_role = f"connect_upload_{uuid.uuid4().hex[:8]}"
+        password = f"pw_{uuid.uuid4().hex[:8]}"
+        self.create_principal(login_role=login_role, password=password, display_name="Connect Upload User")
+
+        env = self.env | {
+            "AGENT_KB_DATABASE_URL": f"postgres://{login_role}:{password}@{self.env['AGENT_KB_DB_HOST']}:{self.env['AGENT_KB_DB_PORT']}/{self.env['AGENT_KB_DB_NAME']}"
+        }
+
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".txt", delete=False) as tmp:
+            tmp.write("hello upload from connect skill\n")
+            fixture_path = Path(tmp.name)
+
+        try:
+            upload_result = subprocess.run(
+                [
+                    "python3",
+                    str(UPLOAD_TEXT_FILE_SCRIPT),
+                    "--file",
+                    str(fixture_path),
+                    "--mime-type",
+                    "text/plain",
+                ],
+                cwd=ROOT,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            fixture_path.unlink(missing_ok=True)
+
+        self.assertEqual(upload_result.returncode, 0, upload_result.stderr)
+        self.assertIn("upload ok", upload_result.stdout)
+        self.assertIn("file_url=kb://uploaded-files/", upload_result.stdout)
+        file_url_line = next(line for line in upload_result.stdout.splitlines() if line.startswith("file_url="))
+        file_url = file_url_line.split("=", 1)[1]
+
+        read_result = subprocess.run(
+            ["python3", str(READ_UPLOADED_FILE_SCRIPT), "--file-url", file_url],
+            cwd=ROOT,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(read_result.returncode, 0, read_result.stderr)
+        self.assertIn("uploaded file read ok", read_result.stdout)
+        self.assertIn("hello upload from connect skill", read_result.stdout)
 
 
 if __name__ == "__main__":

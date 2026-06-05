@@ -38,6 +38,7 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             "CREATE TABLE app.posts",
             "CREATE TABLE app.review_entries",
             "CREATE TABLE app.review_history",
+            "CREATE TABLE app.uploaded_files",
             "CREATE TABLE app.tags",
             "CREATE TABLE app.post_tags",
         ):
@@ -65,6 +66,8 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             "CREATE FUNCTION auth.create_account_login(",
             "CREATE FUNCTION auth.change_own_password(",
             "CREATE FUNCTION auth.reset_managed_account_password(",
+            "CREATE FUNCTION app.file_upload_url(p_file_id bigint)",
+            "CREATE FUNCTION app.parse_uploaded_file_url(p_file_url text)",
             "CREATE TRIGGER trg_review_history",
             "CREATE TRIGGER trg_posts_immutable",
         ):
@@ -103,7 +106,33 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             "USING (true);",
             "REVOKE UPDATE ON app.posts FROM united_agent_user;",
             "GRANT UPDATE (verification) ON app.posts TO united_agent_user;",
+            "REVOKE UPDATE ON app.uploaded_files FROM united_agent_user;",
             "REVOKE UPDATE ON app.tags FROM united_agent_user;",
+        ):
+            self.assertIn(expected, content)
+
+    def test_schema_adds_uploaded_files_table_and_policies(self) -> None:
+        content = self.read_text("postgres/init/001-united-agent.sql")
+
+        for expected in (
+            "CREATE TABLE app.uploaded_files",
+            "filename text NOT NULL",
+            "uploader_account_id bigint NOT NULL REFERENCES auth.accounts(id) ON DELETE RESTRICT",
+            "mime_type text NOT NULL",
+            "content text NOT NULL",
+            "size_bytes integer GENERATED ALWAYS AS",
+            "CHECK (size_bytes >= 0 AND size_bytes <= 10485760)",
+            "CREATE FUNCTION app.is_allowed_text_upload_mime(p_mime_type text)",
+            "CHECK (app.is_allowed_text_upload_mime(mime_type))",
+            "CREATE POLICY uploaded_files_select_all ON app.uploaded_files",
+            "CREATE POLICY uploaded_files_insert_authenticated ON app.uploaded_files",
+            "CREATE POLICY uploaded_files_delete_admin ON app.uploaded_files",
+            "uploader_account_id = auth.current_account_id()",
+            "USING (auth.can_write() AND auth.is_admin())",
+            "ALTER TABLE app.uploaded_files ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE app.uploaded_files FORCE ROW LEVEL SECURITY",
+            "GRANT SELECT, INSERT, DELETE ON ALL TABLES IN SCHEMA app TO united_agent_user;",
+            "kb://uploaded-files/",
         ):
             self.assertIn(expected, content)
 

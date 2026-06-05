@@ -122,6 +122,37 @@ CREATE TABLE app.review_history (
   replaced_by bigint NOT NULL REFERENCES auth.accounts(id) ON DELETE RESTRICT
 );
 
+CREATE FUNCTION app.is_allowed_text_upload_mime(p_mime_type text) RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
+SET search_path = app, pg_catalog
+AS $$
+  SELECT lower(coalesce(btrim(p_mime_type), '')) = ANY (
+    ARRAY[
+      'text/plain',
+      'text/markdown',
+      'text/csv',
+      'text/html',
+      'text/xml',
+      'text/yaml',
+      'application/json',
+      'application/xml',
+      'application/yaml'
+    ]
+  );
+$$;
+
+CREATE TABLE app.uploaded_files (
+  id bigserial PRIMARY KEY,
+  filename text NOT NULL CHECK (btrim(filename) <> ''),
+  uploader_account_id bigint NOT NULL REFERENCES auth.accounts(id) ON DELETE RESTRICT,
+  mime_type text NOT NULL CHECK (app.is_allowed_text_upload_mime(mime_type)),
+  content text NOT NULL,
+  size_bytes integer GENERATED ALWAYS AS (octet_length(convert_to(content, 'UTF8'))) STORED,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (size_bytes >= 0 AND size_bytes <= 10485760)
+);
+
 CREATE TABLE app.tags (
   id bigserial PRIMARY KEY,
   name text NOT NULL UNIQUE CHECK (btrim(name) <> ''),
@@ -143,6 +174,7 @@ CREATE INDEX idx_posts_board ON app.posts(board_id);
 CREATE INDEX idx_posts_improvement ON app.posts(improvement_of) WHERE improvement_of IS NOT NULL;
 CREATE INDEX idx_posts_verification ON app.posts(board_id, verification);
 CREATE INDEX idx_review_history_entry ON app.review_history(review_entry_id);
+CREATE INDEX idx_uploaded_files_uploader ON app.uploaded_files(uploader_account_id, created_at DESC);
 CREATE INDEX idx_post_tags_tag ON app.post_tags(tag_id);
 
 -- 暴露 updated_at 的可变表共用的时间戳触发器。
@@ -676,6 +708,26 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION app.file_upload_url(p_file_id bigint) RETURNS text
+LANGUAGE sql
+IMMUTABLE
+SET search_path = app, pg_catalog
+AS $$
+  SELECT format('kb://uploaded-files/%s', p_file_id);
+$$;
+
+CREATE FUNCTION app.parse_uploaded_file_url(p_file_url text) RETURNS bigint
+LANGUAGE sql
+IMMUTABLE
+SET search_path = app, pg_catalog
+AS $$
+  SELECT CASE
+    WHEN p_file_url ~ '^kb://uploaded-files/[0-9]+$'
+      THEN substring(p_file_url FROM '^kb://uploaded-files/([0-9]+)$')::bigint
+    ELSE NULL
+  END;
+$$;
+
 -- 触发器统一维护 updated_at，并落实 review / post 的不变量。
 CREATE TRIGGER trg_accounts_updated_at
 BEFORE UPDATE ON auth.accounts
@@ -754,12 +806,14 @@ GRANT USAGE ON SCHEMA auth TO united_agent_user;
 GRANT USAGE ON SCHEMA app TO united_agent_user;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA auth TO united_agent_user;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA app TO united_agent_user;
+GRANT SELECT, INSERT, DELETE ON ALL TABLES IN SCHEMA app TO united_agent_user;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA auth TO united_agent_user;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA app TO united_agent_user;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth TO united_agent_user;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA app TO united_agent_user;
 REVOKE UPDATE ON app.posts FROM united_agent_user;
 GRANT UPDATE (verification) ON app.posts TO united_agent_user;
+REVOKE UPDATE ON app.uploaded_files FROM united_agent_user;
 REVOKE UPDATE ON app.tags FROM united_agent_user;
 
 -- 所有受管表启用 RLS，把行可见性与写授权的最终判定保留在 PostgreSQL。
@@ -779,6 +833,8 @@ ALTER TABLE app.review_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.review_entries FORCE ROW LEVEL SECURITY;
 ALTER TABLE app.review_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.review_history FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.uploaded_files ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app.uploaded_files FORCE ROW LEVEL SECURITY;
 ALTER TABLE app.tags ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.tags FORCE ROW LEVEL SECURITY;
 ALTER TABLE app.profiles ENABLE ROW LEVEL SECURITY;
@@ -938,6 +994,22 @@ CREATE POLICY review_history_delete_moderator_or_admin ON app.review_history
       WHERE re.id = review_entry_id
     ))
   );
+
+CREATE POLICY uploaded_files_select_all ON app.uploaded_files
+  FOR SELECT TO united_agent_user
+  USING (true);
+
+CREATE POLICY uploaded_files_insert_authenticated ON app.uploaded_files
+  FOR INSERT TO united_agent_user
+  WITH CHECK (
+    auth.can_write()
+    AND NOT auth.is_guest()
+    AND uploader_account_id = auth.current_account_id()
+  );
+
+CREATE POLICY uploaded_files_delete_admin ON app.uploaded_files
+  FOR DELETE TO united_agent_user
+  USING (auth.can_write() AND auth.is_admin());
 
 CREATE POLICY tags_select_all ON app.tags
   FOR SELECT TO united_agent_user

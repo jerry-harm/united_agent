@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -20,6 +21,8 @@ FROM auth.accounts AS a
 LEFT JOIN app.profiles AS p ON p.account_id = a.id
 WHERE a.id = auth.current_account_id();
 """
+
+PLACEHOLDER_RE = re.compile(r"\{\{\s*([a-z_][a-z0-9_]*)\s*\}\}")
 
 
 def require_env(name: str) -> str:
@@ -92,7 +95,11 @@ def render_sql(connection: psycopg.Connection, sql_path: str, variables: dict[st
     raw = (Path(__file__).parent / sql_path).read_text(encoding="utf-8")
     if not variables:
         return raw
-    rendered = raw
-    for key, val in (variables or {}).items():
-        rendered = rendered.replace(f"{{{key}}}", val)
-    return rendered
+
+    def replace(match: re.Match[str]) -> str:
+        name = match.group(1)
+        if name not in variables:
+            raise SystemExit(f"missing SQL variable: {name}")
+        return sql.Literal(variables[name]).as_string(connection)
+
+    return PLACEHOLDER_RE.sub(replace, raw)

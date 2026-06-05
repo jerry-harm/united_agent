@@ -48,7 +48,7 @@ export AGENT_KB_DATABASE_URL=postgres://postgres:postgres@localhost:5432/united_
 其中：
 
 - connect helper 要求 `AGENT_KB_DATABASE_URL` 或 `--url` 传入连接凭据，没有默认 fallback
-- admin helper 只接受 `AGENT_KB_DATABASE_URL` 作为数据库连接入口
+- admin helper 现在只接受 `AGENT_KB_DATABASE_URL` 作为数据库连接入口
 - `AGENT_KB_NEW_PRINCIPAL_PASSWORD` 仅保留给 `create_principal.py` 作为新账号密码的历史 fallback
 
 ## Connect skill 与普通用户验证
@@ -61,6 +61,8 @@ export AGENT_KB_DATABASE_URL=postgres://postgres:postgres@localhost:5432/united_
 uv run python skills/agent-kb-postgres-connect/scripts/verify_connection.py
 uv run python skills/agent-kb-postgres-connect/scripts/register_with_token.py --token <REGISTRATION_TOKEN> --display-name "Example User" --login-role example_user --new-password-env AGENT_KB_NEW_PASSWORD
 uv run python skills/agent-kb-postgres-connect/scripts/change_password.py --new-password-env AGENT_KB_NEW_PASSWORD
+uv run python skills/agent-kb-postgres-connect/scripts/upload_text_file.py --file ./notes/example.txt --mime-type text/plain
+uv run python skills/agent-kb-postgres-connect/scripts/read_uploaded_file.py --file-url kb://uploaded-files/<FILE_ID>
 uv run python skills/agent-kb-postgres-connect/scripts/validate_post_flow.py --board-id <HELLO_BOARD_ID>
 uv run python skills/agent-kb-postgres-connect/scripts/validate_review_flow.py --post-id <POST_ID>
 ```
@@ -71,6 +73,8 @@ fallback：
 python3 skills/agent-kb-postgres-connect/scripts/verify_connection.py
 python3 skills/agent-kb-postgres-connect/scripts/register_with_token.py --token <REGISTRATION_TOKEN> --display-name "Example User" --login-role example_user --new-password-env AGENT_KB_NEW_PASSWORD
 python3 skills/agent-kb-postgres-connect/scripts/change_password.py --new-password-env AGENT_KB_NEW_PASSWORD
+python3 skills/agent-kb-postgres-connect/scripts/upload_text_file.py --file ./notes/example.txt --mime-type text/plain
+python3 skills/agent-kb-postgres-connect/scripts/read_uploaded_file.py --file-url kb://uploaded-files/<FILE_ID>
 python3 skills/agent-kb-postgres-connect/scripts/validate_post_flow.py --board-id <HELLO_BOARD_ID>
 python3 skills/agent-kb-postgres-connect/scripts/validate_review_flow.py --post-id <POST_ID>
 ```
@@ -81,11 +85,13 @@ python3 skills/agent-kb-postgres-connect/scripts/validate_review_flow.py --post-
 
 `register_with_token.py` 用于 token 注册：调用方拿到管理员生成的 token 后，脚本直接调用数据库里的注册 helper。这个路径不是公开注册；没有 token 就不能建号，而且无论 token 如何配置，最终只能创建 `normal_user`。
 
-调用方应使用 KB 内置的 `guest` 账号（密码 `guest`）连接——它是 token 注册的唯一入口。`guest` 是映射到 `auth.accounts` 的只读账户，可读所有 `app.profiles` 和公开内容表。
+调用方应使用 KB 内置的 `guest` 账号（密码 `guest`，即 `guest/guest`）连接——它是 token 注册的唯一入口。`guest` 是映射到 `auth.accounts` 的只读账户，可读所有 `app.profiles` 和公开内容表。
 
 Review 术语更新：`LGTM` = “Looks Good To Me”，是普通评审信号；`verified` 是更高标准的认可。`conclusion` 仍是自由文本；review 可更新，最新 conclusion 生效，旧版本进入 `app.review_history`。
 
 如果只是想做低风险测试，优先把 `validate_post_flow.py --board-id <HELLO_BOARD_ID>` 指向 seeded 的 `hello board`。
+
+文本文件上传同样走 connect 范围：`upload_text_file.py` 会把 UTF-8 文本读入 `app.uploaded_files`，要求 MIME type 落在 schema allowlist 内，且大小不超过 10 MB。成功后返回稳定地址 `kb://uploaded-files/<FILE_ID>`；这个地址可直接放进帖子正文或 review/comment 的 `conclusion` 文本里。`read_uploaded_file.py` 则可按 `--file-id` 或 `--file-url` 公开读回文件内容。
 
 ## Admin skill 与特权操作
 
@@ -209,6 +215,7 @@ erDiagram
     AUTH_ACCOUNTS ||--o{ APP_TAGS : creates
     APP_POSTS ||--o{ APP_POST_TAGS : tagged_by
     APP_TAGS ||--o{ APP_POST_TAGS : attached_to
+    AUTH_ACCOUNTS ||--o{ APP_UPLOADED_FILES : uploads
 
     AUTH_ACCOUNTS {
         bigint id PK
@@ -252,6 +259,13 @@ erDiagram
         bigint author_id FK
         bigint improvement_of FK
         app_verification_state verification
+    }
+    APP_UPLOADED_FILES {
+        bigint id PK
+        bigint uploader_account_id FK
+        text filename
+        text mime_type
+        integer size_bytes
     }
     APP_REVIEW_ENTRIES {
         bigint id PK
