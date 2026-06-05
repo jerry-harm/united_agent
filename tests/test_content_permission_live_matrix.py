@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 
 from tests.live_postgres_helpers import ROOT, LivePostgresTestCase
@@ -14,8 +15,10 @@ class LiveContentPermissionDocumentationTest(unittest.TestCase):
         self.assertNotIn("python3 -m unittest tests.test_content_permission_live_matrix -v", content)
         self.assertIn("review_entries", content)
         self.assertIn("review_history", content)
+        self.assertIn("file_blobs", content)
+        self.assertIn("post_attachments", content)
+        self.assertIn("review_entry_attachments", content)
         self.assertIn("tags", content)
-        self.assertIn("uploaded_files", content)
 
 
 class LiveContentPermissionMatrixTest(LivePostgresTestCase):
@@ -256,16 +259,16 @@ class LiveContentPermissionMatrixTest(LivePostgresTestCase):
                     )
                 connection.rollback()
 
-    def test_uploaded_file_permissions_and_constraints(self) -> None:
-        category_id = self.create_category(slug=self.make_category_slug("uploads"), title="Upload Matrix Category")
-        uploader_role = self.make_login_role("uploader")
-        uploader_password = f"pw_{self.suffix}_uploader"
-        peer_role = self.make_login_role("peer_upload")
-        peer_password = f"pw_{self.suffix}_peer_upload"
+    def test_blob_and_attachment_permissions_and_visibility(self) -> None:
+        category_id = self.create_category(slug=self.make_category_slug("attachments"), title="Attachment Matrix Category")
+        author_role = self.make_login_role("attachment_author")
+        author_password = f"pw_{self.suffix}_attachment_author"
+        peer_role = self.make_login_role("attachment_peer")
+        peer_password = f"pw_{self.suffix}_attachment_peer"
 
         for login_role, password, display_name in (
-            (uploader_role, uploader_password, "Upload Uploader"),
-            (peer_role, peer_password, "Upload Peer"),
+            (author_role, author_password, "Attachment Author"),
+            (peer_role, peer_password, "Attachment Peer"),
         ):
             result = self.run_create_principal(
                 actor_user="postgres",
@@ -277,86 +280,143 @@ class LiveContentPermissionMatrixTest(LivePostgresTestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
 
-        uploaded_file_id = self.create_uploaded_file(
-            user=uploader_role,
-            password=uploader_password,
-            filename="notes.txt",
-            mime_type="text/plain",
-            content="upload content for permission matrix",
-        )
-
-        with self.connection_for(user=peer_role, password=peer_password) as connection:
+        with self.connection_for(user=author_role, password=author_password) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "SELECT filename, mime_type, content, app.file_upload_url(id) FROM app.uploaded_files WHERE id = %s",
-                    (uploaded_file_id,),
+                    """
+                    SELECT app.create_post_with_attachments(%s, %s, %s, %s, %s, %s::jsonb)
+                    """,
+                    (
+                        category_id,
+                        "text/plain",
+                        "Post With Attachment",
+                        "post body with attachment",
+                        None,
+                        json.dumps(
+                            [
+                                {
+                                    "kind": "new",
+                                    "mime_type": "text/plain",
+                                    "content_text": "blob visible through post attachment",
+                                }
+                            ]
+                        ),
+                    ),
                 )
-                filename, mime_type, content, file_url = cursor.fetchone()
-                self.assertEqual(filename, "notes.txt")
-                self.assertEqual(mime_type, "text/plain")
-                self.assertEqual(content, "upload content for permission matrix")
-                self.assertEqual(file_url, f"kb://uploaded-files/{uploaded_file_id}")
-
-                cursor.execute("SELECT app.parse_uploaded_file_url(%s)", (file_url,))
-                self.assertEqual(cursor.fetchone()[0], uploaded_file_id)
-
-        post_id = self.create_post(
-            user=uploader_role,
-            password=uploader_password,
-            category_id=category_id,
-            title="Post With File URL",
-            body=f"body references kb://uploaded-files/{uploaded_file_id}",
-        )
-        review_entry_id = self.create_review_entry(
-            user=uploader_role,
-            password=uploader_password,
-            post_id=post_id,
-            conclusion=f"review references kb://uploaded-files/{uploaded_file_id}",
-        )
-
-        with self.admin_connection() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT body FROM app.posts WHERE id = %s", (post_id,))
-                self.assertIn(f"kb://uploaded-files/{uploaded_file_id}", cursor.fetchone()[0])
-                cursor.execute("SELECT conclusion FROM app.review_entries WHERE id = %s", (review_entry_id,))
-                self.assertIn(f"kb://uploaded-files/{uploaded_file_id}", cursor.fetchone()[0])
-
-        with self.connection_for(user=peer_role, password=peer_password) as connection:
-            with connection.cursor() as cursor:
-                cursor.execute("DELETE FROM app.uploaded_files WHERE id = %s", (uploaded_file_id,))
-                self.assertEqual(cursor.rowcount, 0)
-                connection.rollback()
-
-        with self.connection_for(user=uploader_role, password=uploader_password) as connection:
-            with connection.cursor() as cursor:
-                with self.assertRaisesRegex(Exception, "violates check constraint"):
-                    cursor.execute(
-                        "INSERT INTO app.uploaded_files (filename, uploader_account_id, mime_type, content) VALUES (%s, auth.current_account_id(), %s, %s)",
-                        ("bad.bin", "application/octet-stream", "bad mime should fail"),
-                    )
-                connection.rollback()
-
-        with self.connection_for(user=uploader_role, password=uploader_password) as connection:
-            with connection.cursor() as cursor:
-                with self.assertRaisesRegex(Exception, "violates check constraint"):
-                    cursor.execute(
-                        "INSERT INTO app.uploaded_files (filename, uploader_account_id, mime_type, content) VALUES (%s, auth.current_account_id(), %s, %s)",
-                        ("too-large.txt", "text/plain", "a" * (10 * 1024 * 1024 + 1)),
-                    )
-                connection.rollback()
-
-        with self.admin_connection() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute("DELETE FROM app.uploaded_files WHERE id = %s", (uploaded_file_id,))
-                self.assertEqual(cursor.rowcount, 1)
+                post_id = cursor.fetchone()[0]
+                cursor.execute(
+                    """
+                    SELECT pa.file_blob_id
+                    FROM app.post_attachments AS pa
+                    WHERE pa.post_id = %s
+                    ORDER BY pa.position
+                    """,
+                    (post_id,),
+                )
+                post_blob_id = cursor.fetchone()[0]
+                cursor.execute(
+                    """
+                    SELECT app.create_review_entry_with_attachments(%s, %s, %s, %s::jsonb)
+                    """,
+                    (
+                        post_id,
+                        False,
+                        "review with attachment",
+                        json.dumps(
+                            [
+                                {
+                                    "kind": "new",
+                                    "mime_type": "text/markdown",
+                                    "content_text": "blob visible through review attachment",
+                                }
+                            ]
+                        ),
+                    ),
+                )
+                review_entry_id = cursor.fetchone()[0]
+                cursor.execute(
+                    """
+                    SELECT rea.file_blob_id
+                    FROM app.review_entry_attachments AS rea
+                    WHERE rea.review_entry_id = %s
+                    ORDER BY rea.position
+                    """,
+                    (review_entry_id,),
+                )
+                review_blob_id = cursor.fetchone()[0]
             connection.commit()
 
         with self.admin_connection() as connection:
             with connection.cursor() as cursor:
-                cursor.execute("SELECT count(*) FROM app.uploaded_files WHERE id = %s", (uploaded_file_id,))
+                cursor.execute("SELECT app.ensure_file_blob(%s, %s)", ("text/plain", "orphan blob not attached anywhere"))
+                orphan_blob_id = cursor.fetchone()[0]
+            connection.commit()
+        self.created_file_blob_ids.add(orphan_blob_id)
+
+        with self.connection_for(user=peer_role, password=peer_password) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT mime_type, content_text FROM app.file_blobs WHERE id = %s",
+                    (post_blob_id,),
+                )
+                mime_type, content = cursor.fetchone()
+                self.assertEqual(mime_type, "text/plain")
+                self.assertEqual(content, "blob visible through post attachment")
+                cursor.execute(
+                    "SELECT mime_type, content_text FROM app.file_blobs WHERE id = %s",
+                    (review_blob_id,),
+                )
+                self.assertEqual(cursor.fetchone(), ("text/markdown", "blob visible through review attachment"))
+                cursor.execute(
+                    "SELECT count(*) FROM app.post_attachments WHERE post_id = %s AND file_blob_id = %s",
+                    (post_id, post_blob_id),
+                )
+                self.assertEqual(cursor.fetchone()[0], 1)
+                cursor.execute(
+                    "SELECT count(*) FROM app.review_entry_attachments WHERE review_entry_id = %s AND file_blob_id = %s",
+                    (review_entry_id, review_blob_id),
+                )
+                self.assertEqual(cursor.fetchone()[0], 1)
+                cursor.execute("SELECT count(*) FROM app.file_blobs WHERE id = %s", (orphan_blob_id,))
                 self.assertEqual(cursor.fetchone()[0], 0)
-                cursor.execute("SELECT body FROM app.posts WHERE id = %s", (post_id,))
-                self.assertIn(f"kb://uploaded-files/{uploaded_file_id}", cursor.fetchone()[0])
+
+        def assert_direct_write_denied(user: str, password: str, sql_text: str, params: tuple[object, ...]) -> None:
+            with self.connection_for(user=user, password=password) as connection:
+                with connection.cursor() as cursor:
+                    with self.assertRaisesRegex(Exception, "permission denied|row-level security"):
+                        cursor.execute(sql_text, params)
+                    connection.rollback()
+
+        assert_direct_write_denied(
+            author_role,
+            author_password,
+            "INSERT INTO app.file_blobs (mime_type, content_text, content_sha256) VALUES (%s, %s, %s)",
+            ("text/plain", "direct blob insert denied", "manual-sha-not-allowed"),
+        )
+        assert_direct_write_denied(
+            author_role,
+            author_password,
+            "INSERT INTO app.post_attachments (post_id, file_blob_id, position) VALUES (%s, %s, %s)",
+            (post_id, post_blob_id, 99),
+        )
+        assert_direct_write_denied(
+            peer_role,
+            peer_password,
+            "DELETE FROM app.post_attachments WHERE post_id = %s AND file_blob_id = %s",
+            (post_id, post_blob_id),
+        )
+        assert_direct_write_denied(
+            peer_role,
+            peer_password,
+            "DELETE FROM app.review_entry_attachments WHERE review_entry_id = %s AND file_blob_id = %s",
+            (review_entry_id, review_blob_id),
+        )
+        assert_direct_write_denied(
+            peer_role,
+            peer_password,
+            "DELETE FROM app.file_blobs WHERE id = %s",
+            (post_blob_id,),
+        )
 
 
 if __name__ == "__main__":

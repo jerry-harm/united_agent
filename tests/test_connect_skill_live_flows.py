@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 import subprocess
-import tempfile
 import unittest
 import uuid
 
 try:
-    import psycopg
     from psycopg import sql
 except ModuleNotFoundError:  # pragma: no cover - environment-dependent
-    psycopg = None
     sql = None
 
 
@@ -19,28 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 VERIFY_CONNECTION_SCRIPT = ROOT / "skills/agent-kb-postgres-connect/scripts/verify_connection.py"
 VALIDATE_POST_FLOW_SCRIPT = ROOT / "skills/agent-kb-postgres-connect/scripts/validate_post_flow.py"
 VALIDATE_REVIEW_FLOW_SCRIPT = ROOT / "skills/agent-kb-postgres-connect/scripts/validate_review_flow.py"
-UPLOAD_TEXT_FILE_SCRIPT = ROOT / "skills/agent-kb-postgres-connect/scripts/upload_text_file.py"
-READ_UPLOADED_FILE_SCRIPT = ROOT / "skills/agent-kb-postgres-connect/scripts/read_uploaded_file.py"
 
-
-def live_db_env() -> dict[str, str]:
-    env = os.environ.copy()
-    if env.get("AGENT_KB_DATABASE_URL"):
-        from urllib.parse import urlsplit
-
-        u = urlsplit(env["AGENT_KB_DATABASE_URL"])
-        env["AGENT_KB_DB_HOST"] = u.hostname or "localhost"
-        env["AGENT_KB_DB_PORT"] = str(u.port or 5432)
-        env["AGENT_KB_DB_NAME"] = u.path.lstrip("/") or "united_agent"
-        env["AGENT_KB_DB_USER"] = u.username or "postgres"
-        env["AGENT_KB_DB_PASSWORD"] = u.password or "postgres"
-    else:
-        env.setdefault("AGENT_KB_DB_HOST", "localhost")
-        env.setdefault("AGENT_KB_DB_PORT", "5432")
-        env.setdefault("AGENT_KB_DB_NAME", "united_agent")
-        env.setdefault("AGENT_KB_DB_USER", "postgres")
-        env.setdefault("AGENT_KB_DB_PASSWORD", "postgres")
-    return env
+from tests.live_postgres_helpers import LivePostgresTestCase
 
 
 class LiveConnectSkillDocumentationTest(unittest.TestCase):
@@ -55,130 +31,36 @@ class LiveConnectSkillDocumentationTest(unittest.TestCase):
         self.assertIn("validate_review_flow.py", content)
 
 
-class LiveConnectSkillTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls) -> None:
-        if psycopg is None:
-            raise unittest.SkipTest('psycopg is required for live PostgreSQL integration tests; install with pip install "psycopg[binary]"')
-        cls.env = live_db_env()
-        try:
-            with psycopg.connect(
-                host=cls.env["AGENT_KB_DB_HOST"],
-                port=cls.env["AGENT_KB_DB_PORT"],
-                dbname=cls.env["AGENT_KB_DB_NAME"],
-                user=cls.env["AGENT_KB_DB_USER"],
-                password=cls.env["AGENT_KB_DB_PASSWORD"],
-            ):
-                pass
-        except psycopg.Error as exc:
-            raise unittest.SkipTest(f"live PostgreSQL is required for this test: {exc}") from exc
-
+class LiveConnectSkillTest(LivePostgresTestCase):
     def setUp(self) -> None:
-        suffix = uuid.uuid4().hex[:8]
-        self.login_role = f"connect_flow_{suffix}"
-        self.password = f"pw_{suffix}"
-        self.unmapped_role = f"connect_unmapped_{suffix}"
+        super().setUp()
+        self.login_role = self.make_login_role("connect_flow")
+        self.password = f"pw_{self.suffix}"
+        self.unmapped_role = self.make_login_role("connect_unmapped")
 
-    def tearDown(self) -> None:
-        with self.admin_connection(autocommit=True) as connection:
-            with connection.cursor() as cursor:
-                cursor.execute("DELETE FROM auth.accounts WHERE pg_login_role IN (%s, %s)", (self.login_role, self.unmapped_role))
-                cursor.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(self.login_role)))
-                cursor.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(self.unmapped_role)))
-
-    def admin_connection(self, autocommit: bool = False) -> psycopg.Connection:
-        connection = psycopg.connect(
-            host=self.env["AGENT_KB_DB_HOST"],
-            port=self.env["AGENT_KB_DB_PORT"],
-            dbname=self.env["AGENT_KB_DB_NAME"],
-            user=self.env["AGENT_KB_DB_USER"],
-            password=self.env["AGENT_KB_DB_PASSWORD"],
-        )
-        connection.autocommit = autocommit
-        return connection
-
-    def create_principal(self, *, login_role: str, password: str, display_name: str) -> None:
-        subprocess.run(
-            [
-                "python3",
-                "skills/agent-kb-postgres-admin/scripts/create_principal.py",
-                "--principal-type",
-                "human",
-                "--display-name",
-                display_name,
-                "--global-role",
-                "normal_user",
-                "--login-role",
-                login_role,
-                "--new-password",
-                password,
-            ],
-            cwd=ROOT,
-            env=self.env,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-
-    def create_category(self, *, slug: str, title: str) -> int:
-        with self.admin_connection() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    INSERT INTO app.categories (slug, title, description, category_type, created_by)
-                    VALUES (%s, %s, %s, 'discussion', auth.current_account_id())
-                    RETURNING id
-                    """,
-                    (slug, title, "connect skill validation category"),
-                )
-                category_id = cursor.fetchone()[0]
-            connection.commit()
-        return category_id
-
-    def create_post(self, *, user: str, password: str, category_id: int, title: str, body: str) -> int:
-        connection_factory = self.admin_connection if user == "postgres" and password == "postgres" else lambda: psycopg.connect(
-            host=self.env["AGENT_KB_DB_HOST"],
-            port=self.env["AGENT_KB_DB_PORT"],
-            dbname=self.env["AGENT_KB_DB_NAME"],
-            user=user,
-            password=password,
-        )
-        with connection_factory() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    INSERT INTO app.posts (category_id, author_id, content_type, title, body)
-                    VALUES (%s, auth.current_account_id(), %s, %s, %s)
-                    RETURNING id
-                    """,
-                    (category_id, "text/plain", title, body),
-                )
-                post_id = cursor.fetchone()[0]
-            connection.commit()
-        return post_id
-
-    def run_connect_script(self, *, user: str, password: str, extra_env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-        db_url = f"postgres://{user}:{password}@{self.env['AGENT_KB_DB_HOST']}:{self.env['AGENT_KB_DB_PORT']}/{self.env['AGENT_KB_DB_NAME']}"
-        env = self.env | {"AGENT_KB_DATABASE_URL": db_url}
-        if extra_env:
-            env.update(extra_env)
-        return subprocess.run(
-            ["python3", str(VERIFY_CONNECTION_SCRIPT)],
-            cwd=ROOT,
-            env=env,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+    def run_connect_script(
+        self,
+        script_path: Path,
+        args: list[str],
+        *,
+        user: str,
+        password: str,
+    ) -> subprocess.CompletedProcess[str]:
+        return self.run_python_script(script_path, args, user=user, password=password)
 
     def test_bundled_connect_script_reports_successful_identity(self) -> None:
-        self.create_principal(
+        result = self.run_create_principal(
+            actor_user="postgres",
+            actor_password="postgres",
             login_role=self.login_role,
-            password=self.password,
+            new_password=self.password,
             display_name="Connect Flow User",
         )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
         result = self.run_connect_script(
+            VERIFY_CONNECTION_SCRIPT,
+            [],
             user=self.login_role,
             password=self.password,
         )
@@ -200,17 +82,20 @@ class LiveConnectSkillTest(unittest.TestCase):
                 )
                 cursor.execute(sql.SQL("GRANT united_agent_user TO {}").format(sql.Identifier(self.unmapped_role)))
 
-        result = self.run_connect_script(user=self.unmapped_role, password=self.password)
+        result = self.run_connect_script(VERIFY_CONNECTION_SCRIPT, [], user=self.unmapped_role, password=self.password)
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("login resolved to no auth.accounts row", result.stderr)
 
     def test_bundled_connect_script_fails_for_inactive_account(self) -> None:
-        self.create_principal(
+        result = self.run_create_principal(
+            actor_user="postgres",
+            actor_password="postgres",
             login_role=self.login_role,
-            password=self.password,
+            new_password=self.password,
             display_name="Disabled Connect User",
         )
+        self.assertEqual(result.returncode, 0, result.stderr)
         with self.admin_connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -219,7 +104,7 @@ class LiveConnectSkillTest(unittest.TestCase):
                 )
             connection.commit()
 
-        result = self.run_connect_script(user=self.login_role, password=self.password)
+        result = self.run_connect_script(VERIFY_CONNECTION_SCRIPT, [], user=self.login_role, password=self.password)
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("is not active: disabled", result.stderr)
@@ -228,16 +113,21 @@ class LiveConnectSkillTest(unittest.TestCase):
         category_slug = f"connect-post-{uuid.uuid4().hex[:8]}"
         login_role = f"connect_post_{uuid.uuid4().hex[:8]}"
         password = f"pw_{uuid.uuid4().hex[:8]}"
-        self.create_principal(login_role=login_role, password=password, display_name="Connect Post User")
+        result = self.run_create_principal(
+            actor_user="postgres",
+            actor_password="postgres",
+            login_role=login_role,
+            new_password=password,
+            display_name="Connect Post User",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
         category_id = self.create_category(slug=category_slug, title="Connect Post Category")
 
-        result = subprocess.run(
-            ["python3", str(VALIDATE_POST_FLOW_SCRIPT), "--category-id", str(category_id)],
-            cwd=ROOT,
-            env=self.env | {"AGENT_KB_DATABASE_URL": f"postgres://{login_role}:{password}@{self.env['AGENT_KB_DB_HOST']}:{self.env['AGENT_KB_DB_PORT']}/{self.env['AGENT_KB_DB_NAME']}"},
-            check=False,
-            capture_output=True,
-            text=True,
+        result = self.run_connect_script(
+            VALIDATE_POST_FLOW_SCRIPT,
+            ["--category-id", str(category_id)],
+            user=login_role,
+            password=password,
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -248,74 +138,27 @@ class LiveConnectSkillTest(unittest.TestCase):
         category_slug = f"connect-review-{uuid.uuid4().hex[:8]}"
         login_role = f"connect_review_{uuid.uuid4().hex[:8]}"
         password = f"pw_{uuid.uuid4().hex[:8]}"
-        self.create_principal(login_role=login_role, password=password, display_name="Connect Review User")
+        result = self.run_create_principal(
+            actor_user="postgres",
+            actor_password="postgres",
+            login_role=login_role,
+            new_password=password,
+            display_name="Connect Review User",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
         category_id = self.create_category(slug=category_slug, title="Connect Review Category")
         post_id = self.create_post(user=login_role, password=password, category_id=category_id, title="Review target", body="body")
 
-        result = subprocess.run(
-            ["python3", str(VALIDATE_REVIEW_FLOW_SCRIPT), "--post-id", str(post_id)],
-            cwd=ROOT,
-            env=self.env | {"AGENT_KB_DATABASE_URL": f"postgres://{login_role}:{password}@{self.env['AGENT_KB_DB_HOST']}:{self.env['AGENT_KB_DB_PORT']}/{self.env['AGENT_KB_DB_NAME']}"},
-            check=False,
-            capture_output=True,
-            text=True,
+        result = self.run_connect_script(
+            VALIDATE_REVIEW_FLOW_SCRIPT,
+            ["--post-id", str(post_id)],
+            user=login_role,
+            password=password,
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("review flow ok", result.stdout)
         self.assertIn("review entry created", result.stdout)
-
-    def test_upload_and_read_uploaded_file_scripts_report_success_for_normal_user(self) -> None:
-        login_role = f"connect_upload_{uuid.uuid4().hex[:8]}"
-        password = f"pw_{uuid.uuid4().hex[:8]}"
-        self.create_principal(login_role=login_role, password=password, display_name="Connect Upload User")
-
-        env = self.env | {
-            "AGENT_KB_DATABASE_URL": f"postgres://{login_role}:{password}@{self.env['AGENT_KB_DB_HOST']}:{self.env['AGENT_KB_DB_PORT']}/{self.env['AGENT_KB_DB_NAME']}"
-        }
-
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".txt", delete=False) as tmp:
-            tmp.write("hello upload from connect skill\n")
-            fixture_path = Path(tmp.name)
-
-        try:
-            upload_result = subprocess.run(
-                [
-                    "python3",
-                    str(UPLOAD_TEXT_FILE_SCRIPT),
-                    "--file",
-                    str(fixture_path),
-                    "--mime-type",
-                    "text/plain",
-                ],
-                cwd=ROOT,
-                env=env,
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-        finally:
-            fixture_path.unlink(missing_ok=True)
-
-        self.assertEqual(upload_result.returncode, 0, upload_result.stderr)
-        self.assertIn("upload ok", upload_result.stdout)
-        self.assertIn("file_url=kb://uploaded-files/", upload_result.stdout)
-        file_url_line = next(line for line in upload_result.stdout.splitlines() if line.startswith("file_url="))
-        file_url = file_url_line.split("=", 1)[1]
-
-        read_result = subprocess.run(
-            ["python3", str(READ_UPLOADED_FILE_SCRIPT), "--file-url", file_url],
-            cwd=ROOT,
-            env=env,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-
-        self.assertEqual(read_result.returncode, 0, read_result.stderr)
-        self.assertIn("uploaded file read ok", read_result.stdout)
-        self.assertIn("hello upload from connect skill", read_result.stdout)
-
 
 if __name__ == "__main__":
     unittest.main()

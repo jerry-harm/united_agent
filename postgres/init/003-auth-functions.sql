@@ -181,6 +181,72 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION auth.create_account_with_login(
+  p_principal_type auth.principal_type,
+  p_display_name text,
+  p_login_role text,
+  p_password text,
+  p_global_role auth.global_role DEFAULT 'normal_user'
+) RETURNS TABLE (
+  account_id bigint,
+  principal_type auth.principal_type,
+  display_name text,
+  pg_login_role text,
+  account_status auth.account_status
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = auth, app, pg_catalog
+AS $$
+DECLARE
+  created_account_id bigint;
+  created_pg_login_role text;
+  created_account_status auth.account_status;
+  created_principal_type auth.principal_type;
+  created_display_name text;
+BEGIN
+  IF NOT auth.can_write() OR NOT auth.is_admin() THEN
+    RAISE EXCEPTION 'policy violation: only admin or super_admin may create accounts';
+  ELSIF auth.is_admin()
+     AND NOT auth.is_super_admin()
+     AND p_global_role <> 'normal_user' THEN
+    RAISE EXCEPTION 'policy violation: admin may create only normal_user accounts';
+  ELSIF auth.is_super_admin()
+     AND p_global_role NOT IN ('normal_user', 'admin') THEN
+    RAISE EXCEPTION 'policy violation: super_admin may create only normal_user or admin accounts';
+  END IF;
+
+  PERFORM auth.create_account_login(p_login_role, p_password);
+
+  INSERT INTO auth.accounts (pg_login_role, account_status)
+  VALUES (p_login_role, 'active')
+  RETURNING auth.accounts.id, auth.accounts.pg_login_role, auth.accounts.account_status
+  INTO created_account_id, created_pg_login_role, created_account_status;
+
+  INSERT INTO app.profiles (account_id, principal_type, display_name)
+  VALUES (created_account_id, p_principal_type, p_display_name)
+  RETURNING app.profiles.principal_type, app.profiles.display_name
+  INTO created_principal_type, created_display_name;
+
+  INSERT INTO auth.principal_global_roles (account_id, role_name, granted_by)
+  VALUES (created_account_id, p_global_role, auth.current_account_id())
+  ON CONFLICT ON CONSTRAINT principal_global_roles_pkey DO NOTHING;
+
+  RETURN QUERY
+  SELECT created_account_id,
+         created_principal_type,
+         created_display_name,
+         created_pg_login_role,
+         created_account_status;
+EXCEPTION
+  WHEN others THEN
+    IF to_regrole(p_login_role) IS NOT NULL THEN
+      EXECUTE format('DROP ROLE %I', p_login_role);
+    END IF;
+    RAISE;
+END;
+$$;
+
 CREATE FUNCTION auth.issue_registration_token(
   p_token text,
   p_max_uses integer,
@@ -295,7 +361,7 @@ BEGIN
 
   INSERT INTO auth.principal_global_roles (account_id, role_name, granted_by)
   VALUES (created_account_id, 'normal_user'::auth.global_role, registration_token.created_by)
-  ON CONFLICT (account_id, role_name) DO NOTHING;
+  ON CONFLICT ON CONSTRAINT principal_global_roles_pkey DO NOTHING;
 
   UPDATE auth.registration_tokens
   SET uses_consumed = uses_consumed + 1,
@@ -388,6 +454,54 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION auth.disable_managed_account(
+  p_target_account_id bigint
+) RETURNS TABLE (
+  account_id bigint,
+  pg_login_role text,
+  account_status auth.account_status
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = auth, pg_catalog
+AS $$
+DECLARE
+  target_id bigint;
+  target_login text;
+  target_status auth.account_status;
+  tombstone_id bigint;
+BEGIN
+  SELECT a.id, a.pg_login_role INTO target_id, target_login
+  FROM auth.accounts AS a
+  WHERE a.id = p_target_account_id;
+
+  IF target_id IS NULL THEN
+    RAISE EXCEPTION 'account % does not exist', p_target_account_id;
+  END IF;
+
+  IF NOT auth.can_manage_account(target_id) THEN
+    RAISE EXCEPTION 'policy violation: actor may only disable permitted accounts';
+  END IF;
+
+  SELECT a.id INTO tombstone_id
+  FROM auth.accounts AS a
+  WHERE a.pg_login_role = 'deleted_account_tombstone';
+
+  IF tombstone_id IS NOT NULL AND tombstone_id = target_id THEN
+    RAISE EXCEPTION 'policy violation: cannot disable the shared deleted-account tombstone';
+  END IF;
+
+  UPDATE auth.accounts
+  SET account_status = 'disabled'::auth.account_status
+  WHERE id = target_id
+  RETURNING auth.accounts.id, auth.accounts.pg_login_role, auth.accounts.account_status
+  INTO target_id, target_login, target_status;
+
+  RETURN QUERY
+  SELECT target_id, target_login, target_status;
+END;
+$$;
+
 CREATE FUNCTION auth.delete_managed_account(p_target_account_id bigint) RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -462,5 +576,99 @@ EXCEPTION
       ALTER TABLE app.posts ENABLE TRIGGER trg_posts_immutable;
     END IF;
     RAISE;
+END;
+$$;
+
+CREATE FUNCTION auth.grant_global_role(
+  p_target_account_id bigint,
+  p_role_name auth.global_role
+) RETURNS TABLE (
+  account_id bigint,
+  role_name text,
+  granted_at timestamptz,
+  granted_by bigint
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = auth, pg_catalog
+AS $$
+DECLARE
+  target_id bigint;
+BEGIN
+  IF NOT auth.is_super_admin() OR NOT auth.can_write() THEN
+    RAISE EXCEPTION 'policy violation: only active super_admin may grant global roles';
+  END IF;
+
+  SELECT a.id INTO target_id
+  FROM auth.accounts AS a
+  WHERE a.id = p_target_account_id;
+
+  IF target_id IS NULL THEN
+    RAISE EXCEPTION 'account % does not exist', p_target_account_id;
+  END IF;
+
+  IF p_role_name = 'super_admin'::auth.global_role THEN
+    RAISE EXCEPTION 'policy violation: use direct database maintenance for super_admin role changes';
+  END IF;
+
+  INSERT INTO auth.principal_global_roles (account_id, role_name, granted_by)
+  VALUES (target_id, p_role_name, auth.current_account_id())
+  ON CONFLICT ON CONSTRAINT principal_global_roles_pkey DO NOTHING;
+
+  RETURN QUERY
+  SELECT pgr.account_id,
+         pgr.role_name::text,
+         pgr.granted_at,
+         pgr.granted_by
+  FROM auth.principal_global_roles AS pgr
+  WHERE pgr.account_id = target_id
+    AND pgr.role_name = p_role_name;
+END;
+$$;
+
+CREATE FUNCTION auth.revoke_global_role(
+  p_target_account_id bigint,
+  p_role_name auth.global_role
+) RETURNS TABLE (
+  account_id bigint,
+  role_name text,
+  granted_at timestamptz,
+  granted_by bigint
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = auth, pg_catalog
+AS $$
+DECLARE
+  target_id bigint;
+BEGIN
+  IF NOT auth.is_super_admin() OR NOT auth.can_write() THEN
+    RAISE EXCEPTION 'policy violation: only active super_admin may revoke global roles';
+  END IF;
+
+  SELECT a.id INTO target_id
+  FROM auth.accounts AS a
+  WHERE a.id = p_target_account_id;
+
+  IF target_id IS NULL THEN
+    RAISE EXCEPTION 'account % does not exist', p_target_account_id;
+  END IF;
+
+  IF p_role_name = 'super_admin'::auth.global_role THEN
+    RAISE EXCEPTION 'policy violation: use direct database maintenance for super_admin role changes';
+  END IF;
+
+  DELETE FROM auth.principal_global_roles
+  WHERE account_id = target_id
+    AND role_name = p_role_name;
+
+  RETURN QUERY
+  SELECT pgr.account_id,
+         pgr.role_name::text,
+         pgr.granted_at,
+         pgr.granted_by
+  FROM auth.principal_global_roles AS pgr
+  WHERE pgr.account_id = target_id
+  ORDER BY pgr.role_name;
 END;
 $$;

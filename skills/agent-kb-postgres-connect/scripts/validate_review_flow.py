@@ -4,8 +4,6 @@ import argparse
 import sys
 from pathlib import Path
 
-import psycopg
-
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -39,15 +37,11 @@ def main() -> int:
 
             cursor.execute(
                 """
-                INSERT INTO app.review_entries (post_id, account_id, lgtm, conclusion)
-                VALUES (%s, auth.current_account_id(), false, %s)
-                ON CONFLICT (post_id, account_id) DO UPDATE
-                SET conclusion = EXCLUDED.conclusion
-                RETURNING id, post_id, account_id, conclusion
+                SELECT app.create_review_entry(%s, false, %s)
                 """,
                 (args.post_id, args.conclusion),
             )
-            review_id, post_id, review_account_id, conclusion = cursor.fetchone()
+            (review_id,) = cursor.fetchone()
 
             cursor.execute(
                 """
@@ -59,6 +53,11 @@ def main() -> int:
             )
             roundtrip = cursor.fetchone()
         connection.commit()
+
+    if roundtrip is None:
+        raise SystemExit("review create roundtrip lookup failed")
+
+    _, post_id, review_account_id, conclusion = roundtrip
 
     if roundtrip != (review_id, post_id, review_account_id, conclusion):
         raise SystemExit("review insert roundtrip mismatch")

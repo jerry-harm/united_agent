@@ -19,16 +19,24 @@ class LiveCategoryPostFlowDocumentationTest(unittest.TestCase):
 class LiveCategoryPostFlowTest(LivePostgresTestCase):
     def test_live_authorization_paths_match_helper_roles(self) -> None:
         category_id = self.create_category(title="Live Flow Category")
-        self.create_principal(
+        result = self.run_create_principal(
             actor_user="postgres",
             actor_password="postgres",
             login_role=self.make_login_role("author"),
             new_password=f"pw_{self.suffix}",
             display_name="Live Flow User",
         )
+        self.assertEqual(result.returncode, 0, result.stderr)
         login_role = sorted(self.created_roles)[0]
         password = f"pw_{self.suffix}"
         normal_user_account_id = self.fetch_account_id(login_role)
+        post_id = self.create_post(
+            user=login_role,
+            password=password,
+            category_id=category_id,
+            title="Live Flow Post",
+            body="post body from integration test",
+        )
 
         with self.connection_for(user=login_role, password=password) as principal_connection:
             with principal_connection.cursor() as cursor:
@@ -41,18 +49,10 @@ class LiveCategoryPostFlowTest(LivePostgresTestCase):
                 self.assertFalse(is_super_admin)
                 self.assertTrue(can_write)
 
-                cursor.execute(
-                    """
-                    INSERT INTO app.posts (category_id, author_id, content_type, title, body)
-                    VALUES (%s, auth.current_account_id(), %s, %s, %s)
-                    RETURNING id, author_id, verification
-                    """,
-                    (category_id, "text/plain", "Live Flow Post", "post body from integration test"),
-                )
+                cursor.execute("SELECT id, author_id, verification FROM app.posts WHERE id = %s", (post_id,))
                 post_id, author_id, verification = cursor.fetchone()
                 self.assertEqual(author_id, normal_user_account_id)
                 self.assertEqual(verification, "progressing")
-            principal_connection.commit()
 
         with self.connection_for(user=login_role, password=password) as principal_connection:
             with principal_connection.cursor() as cursor:
@@ -97,13 +97,14 @@ class LiveCategoryPostFlowTest(LivePostgresTestCase):
     def test_announcement_category_is_admin_only_for_posting(self) -> None:
         login_role = self.make_login_role("announcement")
         password = f"pw_{self.suffix}_announcement"
-        self.run_create_principal(
+        result = self.run_create_principal(
             actor_user="postgres",
             actor_password="postgres",
             login_role=login_role,
             new_password=password,
             display_name="Announcement Flow User",
         )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
         with self.admin_connection() as connection:
             with connection.cursor() as cursor:
@@ -114,36 +115,32 @@ class LiveCategoryPostFlowTest(LivePostgresTestCase):
                 cursor.execute("SELECT id FROM app.categories WHERE slug = 'announcement'")
                 announcement_category_id = cursor.fetchone()[0]
 
-        with self.connection_for(user=login_role, password=password) as principal_connection:
-            with principal_connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    INSERT INTO app.posts (category_id, author_id, content_type, title, body)
-                    VALUES (%s, auth.current_account_id(), %s, %s, %s)
-                    RETURNING id
-                    """,
-                    (hello_category_id, "text/plain", "Hello Category Post", "ordinary user hello category post"),
-                )
-                self.assertIsInstance(cursor.fetchone()[0], int)
-                cursor.execute(
-                    """
-                    INSERT INTO app.posts (category_id, author_id, content_type, title, body)
-                    VALUES (%s, auth.current_account_id(), %s, %s, %s)
-                    RETURNING id
-                    """,
-                    (governance_category_id, "text/plain", "Governance Category Post", "ordinary user governance request"),
-                )
-                self.assertIsInstance(cursor.fetchone()[0], int)
-            principal_connection.commit()
+        self.assertIsInstance(
+            self.create_post(
+                user=login_role,
+                password=password,
+                category_id=hello_category_id,
+                title="Hello Category Post",
+                body="ordinary user hello category post",
+            ),
+            int,
+        )
+        self.assertIsInstance(
+            self.create_post(
+                user=login_role,
+                password=password,
+                category_id=governance_category_id,
+                title="Governance Category Post",
+                body="ordinary user governance request",
+            ),
+            int,
+        )
 
         with self.connection_for(user=login_role, password=password) as principal_connection:
             with principal_connection.cursor() as cursor:
                 with self.assertRaises(Exception) as excinfo:
                     cursor.execute(
-                        """
-                        INSERT INTO app.posts (category_id, author_id, content_type, title, body)
-                        VALUES (%s, auth.current_account_id(), %s, %s, %s)
-                        """,
+                        "SELECT app.create_post(%s, %s, %s, %s)",
                         (announcement_category_id, "announcement", "Denied Announcement", "ordinary user should be denied"),
                     )
                 self.assertIn("row-level security", str(excinfo.exception).lower())
@@ -152,14 +149,12 @@ class LiveCategoryPostFlowTest(LivePostgresTestCase):
         with self.admin_connection() as admin_connection:
             with admin_connection.cursor() as cursor:
                 cursor.execute(
-                    """
-                    INSERT INTO app.posts (category_id, author_id, content_type, title, body)
-                    VALUES (%s, auth.current_account_id(), %s, %s, %s)
-                    RETURNING id, author_id
-                    """,
+                    "SELECT app.create_post(%s, %s, %s, %s)",
                     (announcement_category_id, "announcement", "Admin Announcement", "admin announcement post"),
                 )
-                post_id, author_id = cursor.fetchone()
+                post_id = cursor.fetchone()[0]
+                cursor.execute("SELECT author_id FROM app.posts WHERE id = %s", (post_id,))
+                author_id = cursor.fetchone()[0]
                 self.assertIsInstance(post_id, int)
                 cursor.execute("SELECT auth.current_account_id()")
                 self.assertEqual(author_id, cursor.fetchone()[0])

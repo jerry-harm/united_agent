@@ -11,7 +11,9 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth TO united_agent_user;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA app TO united_agent_user;
 REVOKE UPDATE ON app.posts FROM united_agent_user;
 GRANT UPDATE (verification) ON app.posts TO united_agent_user;
-REVOKE UPDATE ON app.uploaded_files FROM united_agent_user;
+REVOKE INSERT, UPDATE, DELETE ON app.file_blobs FROM united_agent_user;
+REVOKE INSERT, UPDATE, DELETE ON app.post_attachments FROM united_agent_user;
+REVOKE INSERT, UPDATE, DELETE ON app.review_entry_attachments FROM united_agent_user;
 REVOKE UPDATE ON app.tags FROM united_agent_user;
 
 -- 所有受管表启用 RLS，把行可见性与写授权的最终判定保留在 PostgreSQL。
@@ -29,8 +31,12 @@ ALTER TABLE app.review_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.review_entries FORCE ROW LEVEL SECURITY;
 ALTER TABLE app.review_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.review_history FORCE ROW LEVEL SECURITY;
-ALTER TABLE app.uploaded_files ENABLE ROW LEVEL SECURITY;
-ALTER TABLE app.uploaded_files FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.file_blobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app.file_blobs FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.post_attachments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app.post_attachments FORCE ROW LEVEL SECURITY;
+ALTER TABLE app.review_entry_attachments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app.review_entry_attachments FORCE ROW LEVEL SECURITY;
 ALTER TABLE app.tags ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.tags FORCE ROW LEVEL SECURITY;
 ALTER TABLE app.profiles ENABLE ROW LEVEL SECURITY;
@@ -170,21 +176,28 @@ CREATE POLICY review_history_delete_admin ON app.review_history
   FOR DELETE TO united_agent_user
   USING (auth.can_write() AND auth.is_admin());
 
-CREATE POLICY uploaded_files_select_all ON app.uploaded_files
+CREATE POLICY file_blobs_select_via_attachments ON app.file_blobs
+  FOR SELECT TO united_agent_user
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM app.post_attachments AS pa
+      WHERE pa.file_blob_id = app.file_blobs.id
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM app.review_entry_attachments AS rea
+      WHERE rea.file_blob_id = app.file_blobs.id
+    )
+  );
+
+CREATE POLICY post_attachments_select_all ON app.post_attachments
   FOR SELECT TO united_agent_user
   USING (true);
 
-CREATE POLICY uploaded_files_insert_authenticated ON app.uploaded_files
-  FOR INSERT TO united_agent_user
-  WITH CHECK (
-    auth.can_write()
-    AND NOT auth.is_guest()
-    AND uploader_account_id = auth.current_account_id()
-  );
-
-CREATE POLICY uploaded_files_delete_admin ON app.uploaded_files
-  FOR DELETE TO united_agent_user
-  USING (auth.can_write() AND auth.is_admin());
+CREATE POLICY review_entry_attachments_select_all ON app.review_entry_attachments
+  FOR SELECT TO united_agent_user
+  USING (true);
 
 CREATE POLICY tags_select_all ON app.tags
   FOR SELECT TO united_agent_user

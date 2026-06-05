@@ -136,7 +136,10 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("AUTH_PRINCIPAL_GLOBAL_ROLES", content)
         self.assertIn("APP_CATEGORIES", content)
         self.assertIn("APP_POSTS", content)
+        self.assertIn("APP_FILE_BLOBS", content)
+        self.assertIn("APP_POST_ATTACHMENTS", content)
         self.assertIn("APP_REVIEW_ENTRIES", content)
+        self.assertIn("APP_REVIEW_ENTRY_ATTACHMENTS", content)
         self.assertIn("APP_REVIEW_HISTORY", content)
         self.assertIn("APP_TAGS", content)
         self.assertIn("APP_POST_TAGS", content)
@@ -218,22 +221,30 @@ class PostgresAdminToolingTest(unittest.TestCase):
         self.assertIn("login role must match PostgreSQL role naming rules", content)
         self.assertIn("run_sql_file", content)
 
+    def test_admin_schema_exposes_canonical_account_management_functions(self) -> None:
+        content = self.read_text("postgres/init/003-auth-functions.sql")
+
+        self.assertIn("CREATE FUNCTION auth.create_account_with_login(", content)
+        self.assertIn("CREATE FUNCTION auth.disable_managed_account(", content)
+        self.assertIn("CREATE FUNCTION auth.grant_global_role(", content)
+        self.assertIn("CREATE FUNCTION auth.revoke_global_role(", content)
+
     def test_create_principal_sql_targets_account_and_grant_tables(self) -> None:
         content = self.read_text("skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql")
 
-        self.assertIn("INSERT INTO auth.accounts", content)
-        self.assertIn("auth.principal_global_roles", content)
-        self.assertIn("auth.create_account_login", content)
-        self.assertIn("auth.current_account_id()", content)
-        self.assertIn("auth.can_write()", content)
-        self.assertIn("auth.is_admin()", content)
-        self.assertIn("admin may create only normal_user accounts", content)
+        self.assertIn("FROM auth.create_account_with_login(", content)
+        self.assertIn("{{principal_type}}::auth.principal_type", content)
+        self.assertIn("{{global_role}}::auth.global_role", content)
+        self.assertNotIn("INSERT INTO auth.accounts", content)
+        self.assertNotIn("INSERT INTO auth.principal_global_roles", content)
+        self.assertNotIn("auth.create_account_login(", content)
 
-    def test_create_principal_sql_consumes_created_login_cte(self) -> None:
+    def test_create_principal_sql_is_thin_function_delegation(self) -> None:
         content = self.read_text("skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql")
 
-        self.assertIn("created_login AS", content)
-        self.assertRegex(content, r"FROM\s+created_account,\s*created_login")
+        self.assertNotIn("DO $$", content)
+        self.assertNotIn("created_login AS", content)
+        self.assertNotIn("created_account AS", content)
 
     def test_manage_account_python_script_uses_sql_files(self) -> None:
         content = self.read_text("skills/agent-kb-postgres-admin/scripts/manage_account.py")
@@ -304,9 +315,9 @@ class PostgresAdminToolingTest(unittest.TestCase):
         reset_sql = self.read_text("skills/agent-kb-postgres-admin/scripts/sql/manage_account_reset_password.sql")
         schema_sql = self.read_init_sql()
 
-        self.assertIn("auth.can_manage_account(target_id)", disable_sql)
-        self.assertIn("UPDATE auth.accounts", disable_sql)
-        self.assertIn("account_status = 'disabled'", disable_sql)
+        self.assertIn("auth.disable_managed_account", disable_sql)
+        self.assertNotIn("UPDATE auth.accounts", disable_sql)
+        self.assertNotIn("auth.can_manage_account(target_id)", disable_sql)
         self.assertIn("auth.delete_managed_account", delete_sql)
         self.assertIn("CREATE FUNCTION auth.delete_managed_account", schema_sql)
         self.assertIn("auth.can_manage_account(target_id)", schema_sql)
@@ -327,14 +338,12 @@ class PostgresAdminToolingTest(unittest.TestCase):
         revoke_sql = self.read_text("skills/agent-kb-postgres-admin/scripts/sql/manage_global_role_revoke.sql")
         list_sql = self.read_text("skills/agent-kb-postgres-admin/scripts/sql/manage_global_role_list.sql")
 
-        self.assertIn("auth.can_write()", grant_sql)
-        self.assertIn("auth.is_super_admin()", grant_sql)
-        self.assertIn("INSERT INTO auth.principal_global_roles", grant_sql)
-        self.assertIn("direct database maintenance for super_admin role changes", grant_sql)
-        self.assertIn("auth.can_write()", revoke_sql)
-        self.assertIn("auth.is_super_admin()", revoke_sql)
-        self.assertIn("DELETE FROM auth.principal_global_roles", revoke_sql)
-        self.assertIn("direct database maintenance for super_admin role changes", revoke_sql)
+        self.assertIn("auth.grant_global_role", grant_sql)
+        self.assertNotIn("INSERT INTO auth.principal_global_roles", grant_sql)
+        self.assertNotIn("DO $$", grant_sql)
+        self.assertIn("auth.revoke_global_role", revoke_sql)
+        self.assertNotIn("DELETE FROM auth.principal_global_roles", revoke_sql)
+        self.assertNotIn("DO $$", revoke_sql)
         self.assertIn("SELECT account_id, role_name::text AS role_name", list_sql)
 
 

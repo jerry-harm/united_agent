@@ -33,24 +33,238 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION app.file_upload_url(p_file_id bigint) RETURNS text
-LANGUAGE sql
-IMMUTABLE
-SET search_path = app, pg_catalog
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE FUNCTION app.ensure_file_blob(
+  p_mime_type text,
+  p_content_text text
+) RETURNS bigint
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = app, auth, public, pg_catalog
 AS $$
-  SELECT format('kb://uploaded-files/%s', p_file_id);
+DECLARE
+  v_file_blob_id bigint;
+  v_content_sha256 text;
+BEGIN
+  IF NOT auth.can_write() THEN
+    RAISE EXCEPTION 'only active accounts may create file blobs';
+  END IF;
+
+  IF NOT app.is_allowed_text_upload_mime(p_mime_type) THEN
+    RAISE EXCEPTION 'mime type is not allowed: %', p_mime_type;
+  END IF;
+
+  v_content_sha256 = encode(digest(p_content_text, 'sha256'), 'hex');
+
+  INSERT INTO app.file_blobs (mime_type, content_text, content_sha256)
+  VALUES (
+    p_mime_type,
+    p_content_text,
+    v_content_sha256
+  )
+  ON CONFLICT ON CONSTRAINT file_blobs_content_sha256_key DO UPDATE
+  SET mime_type = app.file_blobs.mime_type
+  RETURNING id INTO v_file_blob_id;
+
+  RETURN v_file_blob_id;
+END;
 $$;
 
-CREATE FUNCTION app.parse_uploaded_file_url(p_file_url text) RETURNS bigint
-LANGUAGE sql
-IMMUTABLE
-SET search_path = app, pg_catalog
+CREATE FUNCTION app.create_post(
+  p_category_id bigint,
+  p_content_type text,
+  p_title text,
+  p_body text,
+  p_improvement_of bigint DEFAULT NULL
+) RETURNS bigint
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = app, auth, pg_catalog
 AS $$
-  SELECT CASE
-    WHEN p_file_url ~ '^kb://uploaded-files/[0-9]+$'
-      THEN substring(p_file_url FROM '^kb://uploaded-files/([0-9]+)$')::bigint
-    ELSE NULL
-  END;
+DECLARE
+  v_author_id bigint;
+  v_post_id bigint;
+  v_is_announcement_category boolean;
+BEGIN
+  IF NOT auth.can_write() THEN
+    RAISE EXCEPTION 'only active accounts may create posts';
+  END IF;
+
+  v_author_id := auth.current_account_id();
+  IF v_author_id IS NULL THEN
+    RAISE EXCEPTION 'login resolved to no auth.accounts row';
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1
+    FROM app.categories AS c
+    WHERE c.id = p_category_id
+      AND c.slug = 'announcement'
+  )
+  INTO v_is_announcement_category;
+
+  IF v_is_announcement_category AND NOT auth.is_admin() THEN
+    RAISE EXCEPTION 'row-level security policy violation on table "posts"';
+  END IF;
+
+  INSERT INTO app.posts (category_id, author_id, content_type, title, body, improvement_of)
+  VALUES (p_category_id, v_author_id, p_content_type, p_title, p_body, p_improvement_of)
+  RETURNING id INTO v_post_id;
+
+  RETURN v_post_id;
+END;
+$$;
+
+CREATE FUNCTION app.create_post_with_attachments(
+  p_category_id bigint,
+  p_content_type text,
+  p_title text,
+  p_body text,
+  p_improvement_of bigint DEFAULT NULL,
+  p_attachments jsonb DEFAULT '[]'::jsonb
+) RETURNS bigint
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = app, auth, pg_catalog
+AS $$
+DECLARE
+  v_post_id bigint;
+  v_attachment jsonb;
+  v_ordinality bigint;
+  v_file_blob_id bigint;
+BEGIN
+  v_post_id := app.create_post(
+    p_category_id,
+    p_content_type,
+    p_title,
+    p_body,
+    p_improvement_of
+  );
+
+  FOR v_attachment, v_ordinality IN
+    SELECT items.attachment, items.ordinality
+    FROM jsonb_array_elements(coalesce(p_attachments, '[]'::jsonb)) WITH ORDINALITY AS items(attachment, ordinality)
+  LOOP
+    -- attachment kind contract: WHEN 'new' THEN create blob; WHEN 'existing' THEN reuse file_blob_id.
+    IF v_attachment->>'kind' NOT IN ('new', 'existing') THEN
+      RAISE EXCEPTION 'attachment kind must be new or existing';
+    END IF;
+
+    IF v_attachment->>'kind' = 'new' THEN
+      v_file_blob_id := app.ensure_file_blob(
+        v_attachment->>'mime_type',
+        v_attachment->>'content_text'
+      );
+    ELSE
+      v_file_blob_id := (v_attachment->>'file_blob_id')::bigint;
+    END IF;
+
+    IF v_file_blob_id IS NULL THEN
+      RAISE EXCEPTION 'attachment must resolve to a file_blob_id';
+    END IF;
+
+    PERFORM 1 FROM app.file_blobs WHERE id = v_file_blob_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'file blob % does not exist', v_file_blob_id;
+    END IF;
+
+    INSERT INTO app.post_attachments (post_id, file_blob_id, position)
+    VALUES (v_post_id, v_file_blob_id, v_ordinality - 1);
+  END LOOP;
+
+  RETURN v_post_id;
+END;
+$$;
+
+CREATE FUNCTION app.create_review_entry(
+  p_post_id bigint,
+  p_lgtm boolean DEFAULT false,
+  p_conclusion text DEFAULT ''
+) RETURNS bigint
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = app, auth, pg_catalog
+AS $$
+DECLARE
+  v_account_id bigint;
+  v_review_entry_id bigint;
+BEGIN
+  IF NOT auth.can_write() THEN
+    RAISE EXCEPTION 'only active accounts may create review entries';
+  END IF;
+
+  v_account_id := auth.current_account_id();
+  IF v_account_id IS NULL THEN
+    RAISE EXCEPTION 'login resolved to no auth.accounts row';
+  END IF;
+
+  INSERT INTO app.review_entries (post_id, account_id, lgtm, conclusion)
+  VALUES (p_post_id, v_account_id, coalesce(p_lgtm, false), coalesce(p_conclusion, ''))
+  ON CONFLICT (post_id, account_id) DO UPDATE
+  SET lgtm = EXCLUDED.lgtm,
+      conclusion = EXCLUDED.conclusion,
+      updated_at = now()
+  RETURNING id INTO v_review_entry_id;
+
+  RETURN v_review_entry_id;
+END;
+$$;
+
+CREATE FUNCTION app.create_review_entry_with_attachments(
+  p_post_id bigint,
+  p_lgtm boolean DEFAULT false,
+  p_conclusion text DEFAULT '',
+  p_attachments jsonb DEFAULT '[]'::jsonb
+) RETURNS bigint
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = app, auth, pg_catalog
+AS $$
+DECLARE
+  v_review_entry_id bigint;
+  v_attachment jsonb;
+  v_ordinality bigint;
+  v_file_blob_id bigint;
+BEGIN
+  v_review_entry_id := app.create_review_entry(p_post_id, p_lgtm, p_conclusion);
+
+  DELETE FROM app.review_entry_attachments
+  WHERE review_entry_id = v_review_entry_id;
+
+  FOR v_attachment, v_ordinality IN
+    SELECT items.attachment, items.ordinality
+    FROM jsonb_array_elements(coalesce(p_attachments, '[]'::jsonb)) WITH ORDINALITY AS items(attachment, ordinality)
+  LOOP
+    -- attachment kind contract: WHEN 'new' THEN create blob; WHEN 'existing' THEN reuse file_blob_id.
+    IF v_attachment->>'kind' NOT IN ('new', 'existing') THEN
+      RAISE EXCEPTION 'attachment kind must be new or existing';
+    END IF;
+
+    IF v_attachment->>'kind' = 'new' THEN
+      v_file_blob_id := app.ensure_file_blob(
+        v_attachment->>'mime_type',
+        v_attachment->>'content_text'
+      );
+    ELSE
+      v_file_blob_id := (v_attachment->>'file_blob_id')::bigint;
+    END IF;
+
+    IF v_file_blob_id IS NULL THEN
+      RAISE EXCEPTION 'attachment must resolve to a file_blob_id';
+    END IF;
+
+    PERFORM 1 FROM app.file_blobs WHERE id = v_file_blob_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'file blob % does not exist', v_file_blob_id;
+    END IF;
+
+    INSERT INTO app.review_entry_attachments (review_entry_id, file_blob_id, position)
+    VALUES (v_review_entry_id, v_file_blob_id, v_ordinality - 1);
+  END LOOP;
+
+  RETURN v_review_entry_id;
+END;
 $$;
 
 -- 触发器统一维护 updated_at，并落实 review / post 的不变量。

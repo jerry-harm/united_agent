@@ -104,15 +104,32 @@ AS $$
   );
 $$;
 
-CREATE TABLE app.uploaded_files (
+CREATE TABLE app.file_blobs (
   id bigserial PRIMARY KEY,
-  filename text NOT NULL CHECK (btrim(filename) <> ''),
-  uploader_account_id bigint NOT NULL REFERENCES auth.accounts(id) ON DELETE RESTRICT,
   mime_type text NOT NULL CHECK (app.is_allowed_text_upload_mime(mime_type)),
-  content text NOT NULL,
-  size_bytes integer GENERATED ALWAYS AS (octet_length(content)) STORED,
+  content_text text NOT NULL,
+  content_sha256 text NOT NULL UNIQUE CHECK (btrim(content_sha256) <> ''),
+  size_bytes integer GENERATED ALWAYS AS (octet_length(content_text)) STORED,
   created_at timestamptz NOT NULL DEFAULT now(),
   CHECK (size_bytes >= 0 AND size_bytes <= 10485760)
+);
+
+CREATE TABLE app.post_attachments (
+  post_id bigint NOT NULL REFERENCES app.posts(id) ON DELETE CASCADE,
+  file_blob_id bigint NOT NULL REFERENCES app.file_blobs(id) ON DELETE RESTRICT,
+  position integer NOT NULL CHECK (position >= 0),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (post_id, file_blob_id),
+  UNIQUE (post_id, position)
+);
+
+CREATE TABLE app.review_entry_attachments (
+  review_entry_id bigint NOT NULL REFERENCES app.review_entries(id) ON DELETE CASCADE,
+  file_blob_id bigint NOT NULL REFERENCES app.file_blobs(id) ON DELETE RESTRICT,
+  position integer NOT NULL CHECK (position >= 0),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (review_entry_id, file_blob_id),
+  UNIQUE (review_entry_id, position)
 );
 
 CREATE TABLE app.tags (
@@ -135,5 +152,6 @@ CREATE INDEX idx_posts_category ON app.posts(category_id);
 CREATE INDEX idx_posts_improvement ON app.posts(improvement_of) WHERE improvement_of IS NOT NULL;
 CREATE INDEX idx_posts_verification ON app.posts(category_id, verification);
 CREATE INDEX idx_review_history_entry ON app.review_history(review_entry_id);
-CREATE INDEX idx_uploaded_files_uploader ON app.uploaded_files(uploader_account_id, created_at DESC);
+CREATE INDEX idx_post_attachments_blob ON app.post_attachments(file_blob_id, post_id);
+CREATE INDEX idx_review_attachments_blob ON app.review_entry_attachments(file_blob_id, review_entry_id);
 CREATE INDEX idx_post_tags_tag ON app.post_tags(tag_id);

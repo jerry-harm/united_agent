@@ -58,7 +58,9 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             "CREATE TABLE app.posts",
             "CREATE TABLE app.review_entries",
             "CREATE TABLE app.review_history",
-            "CREATE TABLE app.uploaded_files",
+            "CREATE TABLE app.file_blobs",
+            "CREATE TABLE app.post_attachments",
+            "CREATE TABLE app.review_entry_attachments",
             "CREATE TABLE app.tags",
             "CREATE TABLE app.post_tags",
         ):
@@ -73,6 +75,12 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             "ALTER TABLE app.profiles ENABLE ROW LEVEL SECURITY",
             "ALTER TABLE app.profiles FORCE ROW LEVEL SECURITY",
             "ALTER TABLE app.posts ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE app.file_blobs ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE app.file_blobs FORCE ROW LEVEL SECURITY",
+            "ALTER TABLE app.post_attachments ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE app.post_attachments FORCE ROW LEVEL SECURITY",
+            "ALTER TABLE app.review_entry_attachments ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE app.review_entry_attachments FORCE ROW LEVEL SECURITY",
             "ALTER TABLE app.review_history ENABLE ROW LEVEL SECURITY",
             "ALTER TABLE app.posts FORCE ROW LEVEL SECURITY",
             "REVOKE ALL ON SCHEMA public FROM PUBLIC",
@@ -84,8 +92,11 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             "CREATE FUNCTION auth.create_account_login(",
             "CREATE FUNCTION auth.change_own_password(",
             "CREATE FUNCTION auth.reset_managed_account_password(",
-            "CREATE FUNCTION app.file_upload_url(p_file_id bigint)",
-            "CREATE FUNCTION app.parse_uploaded_file_url(p_file_url text)",
+            "CREATE FUNCTION app.ensure_file_blob(",
+            "CREATE FUNCTION app.create_post(",
+            "CREATE FUNCTION app.create_post_with_attachments(",
+            "CREATE FUNCTION app.create_review_entry(",
+            "CREATE FUNCTION app.create_review_entry_with_attachments(",
             "CREATE TRIGGER trg_review_history",
             "CREATE TRIGGER trg_posts_immutable",
         ):
@@ -98,6 +109,47 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             content,
         )
         self.assertIn("SET search_path = auth, pg_catalog", content)
+        self.assertNotIn("CREATE FUNCTION app.file_upload_url(", content)
+        self.assertNotIn("CREATE FUNCTION app.parse_uploaded_file_url(", content)
+        self.assertNotIn("kb://file-blobs/", content)
+
+    def test_schema_adds_pure_id_attachment_write_helpers(self) -> None:
+        content = self.read_text("postgres/init/004-app-functions-and-triggers.sql")
+
+        for expected in (
+            "CREATE FUNCTION app.ensure_file_blob(",
+            "p_mime_type text",
+            "p_content_text text",
+            "content_sha256 = encode(digest(p_content_text, 'sha256'), 'hex')",
+            "INSERT INTO app.file_blobs (mime_type, content_text, content_sha256)",
+            "ON CONFLICT (content_sha256) DO UPDATE",
+            "RETURNING id",
+            "CREATE FUNCTION app.create_post(",
+            "IF NOT auth.can_write() THEN",
+            "v_author_id := auth.current_account_id()",
+            "INSERT INTO app.posts (category_id, author_id, content_type, title, body, improvement_of)",
+            "CREATE FUNCTION app.create_post_with_attachments(",
+            "p_attachments jsonb DEFAULT '[]'::jsonb",
+            "jsonb_array_elements(coalesce(p_attachments, '[]'::jsonb)) WITH ORDINALITY",
+            "attachment->>'kind'",
+            "IF attachment->>'kind' NOT IN ('new', 'existing') THEN",
+            "IF attachment->>'kind' = 'new' THEN",
+            "file_blob_id := app.ensure_file_blob(",
+            "ELSE\n      file_blob_id := (attachment->>'file_blob_id')::bigint;",
+            "(attachment->>'file_blob_id')::bigint",
+            "INSERT INTO app.post_attachments (post_id, file_blob_id, position)",
+            "ordinality - 1",
+            "CREATE FUNCTION app.create_review_entry(",
+            "INSERT INTO app.review_entries (post_id, account_id, lgtm, conclusion)",
+            "ON CONFLICT (post_id, account_id) DO UPDATE",
+            "CREATE FUNCTION app.create_review_entry_with_attachments(",
+            "INSERT INTO app.review_entry_attachments (review_entry_id, file_blob_id, position)",
+        ):
+            self.assertIn(expected, content)
+
+        self.assertNotIn("kb://file-blobs/", content)
+        self.assertNotIn("file_blob_url", content)
+        self.assertNotIn("parse_file_blob_url", content)
 
     def test_write_policies_gate_on_centralized_can_write_helper(self) -> None:
         content = self.read_init_sql()
@@ -124,41 +176,61 @@ class AgentKnowledgeBasePostgresSkeletonTest(unittest.TestCase):
             "USING (true);",
             "REVOKE UPDATE ON app.posts FROM united_agent_user;",
             "GRANT UPDATE (verification) ON app.posts TO united_agent_user;",
-            "REVOKE UPDATE ON app.uploaded_files FROM united_agent_user;",
+            "REVOKE INSERT, UPDATE, DELETE ON app.file_blobs FROM united_agent_user;",
+            "REVOKE INSERT, UPDATE, DELETE ON app.post_attachments FROM united_agent_user;",
+            "REVOKE INSERT, UPDATE, DELETE ON app.review_entry_attachments FROM united_agent_user;",
             "REVOKE UPDATE ON app.tags FROM united_agent_user;",
         ):
             self.assertIn(expected, content)
 
-    def test_schema_adds_uploaded_files_table_and_policies(self) -> None:
+    def test_schema_adds_attachment_and_blob_select_policies(self) -> None:
         content = self.read_init_sql()
 
         for expected in (
-            "CREATE TABLE app.uploaded_files",
-            "filename text NOT NULL",
-            "uploader_account_id bigint NOT NULL REFERENCES auth.accounts(id) ON DELETE RESTRICT",
+            "CREATE POLICY file_blobs_select_via_attachments ON app.file_blobs",
+            "FROM app.post_attachments AS pa",
+            "WHERE pa.file_blob_id = app.file_blobs.id",
+            "FROM app.review_entry_attachments AS rea",
+            "WHERE rea.file_blob_id = app.file_blobs.id",
+            "CREATE POLICY post_attachments_select_all ON app.post_attachments",
+            "CREATE POLICY review_entry_attachments_select_all ON app.review_entry_attachments",
+        ):
+            self.assertIn(expected, content)
+
+        self.assertNotIn("uploaded_files_select_all", content)
+        self.assertNotIn("uploaded_files_insert_authenticated", content)
+        self.assertNotIn("uploaded_files_delete_admin", content)
+
+    def test_schema_adds_file_blob_and_attachment_tables(self) -> None:
+        content = self.read_text("postgres/init/002-tables.sql")
+
+        for expected in (
+            "CREATE TABLE app.file_blobs",
             "mime_type text NOT NULL",
-            "content text NOT NULL",
+            "content_text text NOT NULL",
+            "content_sha256 text NOT NULL UNIQUE",
             "size_bytes integer GENERATED ALWAYS AS",
             "CHECK (size_bytes >= 0 AND size_bytes <= 10485760)",
             "CREATE FUNCTION app.is_allowed_text_upload_mime(p_mime_type text)",
             "CHECK (app.is_allowed_text_upload_mime(mime_type))",
-            "CREATE POLICY uploaded_files_select_all ON app.uploaded_files",
-            "CREATE POLICY uploaded_files_insert_authenticated ON app.uploaded_files",
-            "CREATE POLICY uploaded_files_delete_admin ON app.uploaded_files",
-            "uploader_account_id = auth.current_account_id()",
-            "USING (auth.can_write() AND auth.is_admin())",
-            "ALTER TABLE app.uploaded_files ENABLE ROW LEVEL SECURITY",
-            "ALTER TABLE app.uploaded_files FORCE ROW LEVEL SECURITY",
-            "GRANT SELECT, INSERT, DELETE ON ALL TABLES IN SCHEMA app TO united_agent_user;",
-            "kb://uploaded-files/",
+            "CREATE TABLE app.post_attachments",
+            "post_id bigint NOT NULL REFERENCES app.posts(id) ON DELETE CASCADE",
+            "file_blob_id bigint NOT NULL REFERENCES app.file_blobs(id) ON DELETE RESTRICT",
+            "UNIQUE (post_id, position)",
+            "CREATE TABLE app.review_entry_attachments",
+            "review_entry_id bigint NOT NULL REFERENCES app.review_entries(id) ON DELETE CASCADE",
+            "UNIQUE (review_entry_id, position)",
+            "CREATE INDEX idx_post_attachments_blob ON app.post_attachments(file_blob_id, post_id)",
+            "CREATE INDEX idx_review_attachments_blob ON app.review_entry_attachments(file_blob_id, review_entry_id)",
         ):
             self.assertIn(expected, content)
 
         self.assertIn(
-            "size_bytes integer GENERATED ALWAYS AS (octet_length(content)) STORED",
+            "size_bytes integer GENERATED ALWAYS AS (octet_length(content_text)) STORED",
             content,
         )
-        self.assertNotIn("convert_to(content, 'UTF8')", content)
+        self.assertNotIn("CREATE TABLE app.uploaded_files", content)
+        self.assertNotIn("convert_to(content_text, 'UTF8')", content)
 
     def test_schema_restricts_announcement_posts_to_admin_sessions_only(self) -> None:
         content = self.read_init_sql()

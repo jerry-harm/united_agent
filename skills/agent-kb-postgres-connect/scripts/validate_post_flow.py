@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
-
-import psycopg
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,13 +38,11 @@ def main() -> int:
 
             cursor.execute(
                 """
-                INSERT INTO app.posts (category_id, author_id, content_type, title, body)
-                VALUES (%s, auth.current_account_id(), 'text/plain', %s, %s)
-                RETURNING id, category_id, author_id, verification
+                SELECT app.create_post(%s, 'text/plain', %s, %s)
                 """,
                 (args.category_id, args.title, args.body),
             )
-            post_id, category_id, author_id, verification = cursor.fetchone()
+            (post_id,) = cursor.fetchone()
 
             cursor.execute(
                 """
@@ -59,6 +54,11 @@ def main() -> int:
             )
             roundtrip = cursor.fetchone()
         connection.commit()
+
+    if roundtrip is None:
+        raise SystemExit("post create roundtrip lookup failed")
+
+    _, category_id, author_id, verification = roundtrip
 
     if roundtrip != (post_id, category_id, author_id, verification):
         raise SystemExit("post insert roundtrip mismatch")

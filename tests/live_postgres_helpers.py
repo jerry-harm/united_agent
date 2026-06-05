@@ -67,7 +67,7 @@ class LivePostgresTestCase(unittest.TestCase):
         self.created_roles: set[str] = set()
         self.created_category_slugs: set[str] = set()
         self.created_tag_names: set[str] = set()
-        self.created_uploaded_file_ids: set[int] = set()
+        self.created_file_blob_ids: set[int] = set()
 
     def tearDown(self) -> None:
         with self.admin_connection(autocommit=True) as connection:
@@ -75,9 +75,9 @@ class LivePostgresTestCase(unittest.TestCase):
                 account_ids = self.account_ids_for_cleanup(cursor)
                 category_ids = self.category_ids_for_cleanup(cursor)
                 tag_ids = self.tag_ids_for_cleanup(cursor)
-                uploaded_file_ids = self.uploaded_file_ids_for_cleanup(cursor, account_ids)
                 post_ids = self.post_ids_for_cleanup(cursor, account_ids, category_ids)
                 review_entry_ids = self.review_entry_ids_for_cleanup(cursor, account_ids, post_ids)
+                file_blob_ids = self.file_blob_ids_for_cleanup(cursor, post_ids, review_entry_ids)
 
                 if post_ids or tag_ids:
                     cursor.execute(
@@ -85,9 +85,17 @@ class LivePostgresTestCase(unittest.TestCase):
                         (post_ids, tag_ids),
                     )
                 if review_entry_ids:
+                    cursor.execute(
+                        "DELETE FROM app.review_entry_attachments WHERE review_entry_id = ANY(%s)",
+                        (review_entry_ids,),
+                    )
+                if post_ids:
+                    cursor.execute(
+                        "DELETE FROM app.post_attachments WHERE post_id = ANY(%s)",
+                        (post_ids,),
+                    )
+                if review_entry_ids:
                     cursor.execute("DELETE FROM app.review_history WHERE review_entry_id = ANY(%s)", (review_entry_ids,))
-                if uploaded_file_ids:
-                    cursor.execute("DELETE FROM app.uploaded_files WHERE id = ANY(%s)", (uploaded_file_ids,))
                 if review_entry_ids or post_ids or account_ids:
                     cursor.execute(
                         "DELETE FROM app.review_entries WHERE id = ANY(%s) OR post_id = ANY(%s) OR account_id = ANY(%s)",
@@ -102,6 +110,20 @@ class LivePostgresTestCase(unittest.TestCase):
                     cursor.execute(
                         "DELETE FROM app.tags WHERE id = ANY(%s) OR created_by = ANY(%s)",
                         (tag_ids, account_ids),
+                    )
+                if file_blob_ids:
+                    cursor.execute(
+                        """
+                        DELETE FROM app.file_blobs AS fb
+                        WHERE fb.id = ANY(%s)
+                          AND NOT EXISTS (
+                            SELECT 1 FROM app.post_attachments AS pa WHERE pa.file_blob_id = fb.id
+                          )
+                          AND NOT EXISTS (
+                            SELECT 1 FROM app.review_entry_attachments AS rea WHERE rea.file_blob_id = fb.id
+                          )
+                        """,
+                        (file_blob_ids,),
                     )
                 if category_ids:
                     cursor.execute("DELETE FROM app.categories WHERE id = ANY(%s)", (category_ids,))
@@ -145,15 +167,26 @@ class LivePostgresTestCase(unittest.TestCase):
         )
         return [row[0] for row in cursor.fetchall()]
 
-    def uploaded_file_ids_for_cleanup(self, cursor: psycopg.Cursor, account_ids: list[int]) -> list[int]:
-        ids = sorted(self.created_uploaded_file_ids)
-        if account_ids:
-            cursor.execute(
-                "SELECT id FROM app.uploaded_files WHERE id = ANY(%s) OR uploader_account_id = ANY(%s)",
-                (ids, account_ids),
-            )
-            return [row[0] for row in cursor.fetchall()]
-        return ids
+    def file_blob_ids_for_cleanup(self, cursor: psycopg.Cursor, post_ids: list[int], review_entry_ids: list[int]) -> list[int]:
+        cursor.execute(
+            """
+            SELECT DISTINCT file_blob_id
+            FROM (
+              SELECT pa.file_blob_id
+              FROM app.post_attachments AS pa
+              WHERE pa.post_id = ANY(%s)
+              UNION
+              SELECT rea.file_blob_id
+              FROM app.review_entry_attachments AS rea
+              WHERE rea.review_entry_id = ANY(%s)
+              UNION
+              SELECT unnest(%s::bigint[])
+            ) AS blob_ids
+            WHERE file_blob_id IS NOT NULL
+            """,
+            (post_ids, review_entry_ids, sorted(self.created_file_blob_ids)),
+        )
+        return [row[0] for row in cursor.fetchall()]
 
     def review_entry_ids_for_cleanup(self, cursor: psycopg.Cursor, account_ids: list[int], post_ids: list[int]) -> list[int]:
         cursor.execute(
@@ -203,12 +236,10 @@ class LivePostgresTestCase(unittest.TestCase):
         password: str,
         check: bool = False,
     ) -> subprocess.CompletedProcess[str]:
-        from urllib.parse import urlencode
-
         db_url = f"postgres://{user}:{password}@{self.env['AGENT_KB_DB_HOST']}:{self.env['AGENT_KB_DB_PORT']}/{self.env['AGENT_KB_DB_NAME']}"
         env = self.env | {"AGENT_KB_DATABASE_URL": db_url}
         return subprocess.run(
-            ["python3", str(script_path), *args],
+            ["uv", "run", "python", str(script_path), *args],
             cwd=ROOT,
             env=env,
             check=check,
@@ -247,6 +278,9 @@ class LivePostgresTestCase(unittest.TestCase):
             password=actor_password,
             check=check,
         )
+
+    def create_principal(self, **kwargs) -> subprocess.CompletedProcess[str]:
+        return self.run_create_principal(**kwargs)
 
     def run_manage_account(
         self,
@@ -309,9 +343,7 @@ class LivePostgresTestCase(unittest.TestCase):
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    INSERT INTO app.posts (category_id, author_id, content_type, title, body)
-                    VALUES (%s, auth.current_account_id(), %s, %s, %s)
-                    RETURNING id
+                    SELECT app.create_post(%s, %s, %s, %s)
                     """,
                     (category_id, "text/plain", title, body),
                 )
@@ -332,9 +364,7 @@ class LivePostgresTestCase(unittest.TestCase):
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    INSERT INTO app.review_entries (post_id, account_id, lgtm, conclusion)
-                    VALUES (%s, auth.current_account_id(), %s, %s)
-                    RETURNING id
+                    SELECT app.create_review_entry(%s, %s, %s)
                     """,
                     (post_id, lgtm, conclusion),
                 )
@@ -358,21 +388,19 @@ class LivePostgresTestCase(unittest.TestCase):
             connection.commit()
         return tag_id
 
-    def create_uploaded_file(self, *, user: str, password: str, filename: str, mime_type: str, content: str) -> int:
+    def create_file_blob(self, *, user: str, password: str, mime_type: str, content: str) -> int:
         with self.connection_for(user=user, password=password) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    INSERT INTO app.uploaded_files (filename, uploader_account_id, mime_type, content)
-                    VALUES (%s, auth.current_account_id(), %s, %s)
-                    RETURNING id
+                    SELECT app.ensure_file_blob(%s, %s)
                     """,
-                    (filename, mime_type, content),
+                    (mime_type, content),
                 )
-                uploaded_file_id = cursor.fetchone()[0]
+                file_blob_id = cursor.fetchone()[0]
             connection.commit()
-        self.created_uploaded_file_ids.add(uploaded_file_id)
-        return uploaded_file_id
+        self.created_file_blob_ids.add(file_blob_id)
+        return file_blob_id
 
     def fetch_account_id(self, login_role: str) -> int:
         with self.admin_connection() as connection:
