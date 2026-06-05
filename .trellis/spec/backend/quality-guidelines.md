@@ -38,6 +38,7 @@ There is no dedicated lint config or type-checker config in the repo yet. Curren
 - Run shipped Python scripts and Python-based verification commands through `uv run ...` from the repo root; do not document bare `python3 ...` invocations as the standard path.
 - Use placeholder rendering via `sql.Literal(...).as_string(connection)` rather than manual string concatenation.
 - Keep Python entrypoints thin: parse args, validate obvious inputs, delegate to SQL.
+- For fixed write-path business rules, prefer stable PostgreSQL function contracts under `auth` / `app`; shipped wrappers should call those functions instead of re-embedding multi-step business SQL.
 - Add or update regression tests whenever changing:
   - bootstrap SQL
   - helper SQL files

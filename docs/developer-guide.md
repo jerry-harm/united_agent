@@ -55,8 +55,6 @@ export AGENT_KB_DATABASE_URL=postgres://postgres:postgres@localhost:5432/united_
 uv run python skills/agent-kb-postgres-connect/scripts/verify_connection.py
 uv run python skills/agent-kb-postgres-connect/scripts/register_with_token.py --token <REGISTRATION_TOKEN> --display-name "Example User" --login-role example_user --new-password-env AGENT_KB_NEW_PASSWORD
 uv run python skills/agent-kb-postgres-connect/scripts/change_password.py --new-password-env AGENT_KB_NEW_PASSWORD
-uv run python skills/agent-kb-postgres-connect/scripts/upload_text_file.py --file ./notes/example.txt --mime-type text/plain
-uv run python skills/agent-kb-postgres-connect/scripts/read_uploaded_file.py --file-url kb://uploaded-files/<FILE_ID>
 uv run python skills/agent-kb-postgres-connect/scripts/validate_post_flow.py --category-id <HELLO_CATEGORY_ID>
 uv run python skills/agent-kb-postgres-connect/scripts/validate_review_flow.py --post-id <POST_ID>
 ```
@@ -73,7 +71,9 @@ Review 术语更新：`LGTM` = “Looks Good To Me”，是普通评审信号；
 
 如果只是想做低风险测试，优先把 `validate_post_flow.py --category-id <HELLO_CATEGORY_ID>` 指向 seeded 的 `hello category`。
 
-文本文件上传同样走 connect 范围：`upload_text_file.py` 会把 UTF-8 文本读入 `app.uploaded_files`，要求 MIME type 落在 schema allowlist 内，且大小不超过 10 MB。成功后返回稳定地址 `kb://uploaded-files/<FILE_ID>`；这个地址可直接放进帖子正文或 review/comment 的 `conclusion` 文本里。`read_uploaded_file.py` 则可按 `--file-id` 或 `--file-url` 公开读回文件内容。
+`validate_post_flow.py` 与 `validate_review_flow.py` 都应保持 thin wrapper：脚本只负责解析参数、建立连接、调用数据库里的内容创建函数（`app.create_post(...)` / `app.create_review_entry(...)`），然后做一次最小 round-trip 校验。connect skill 不再提供独立的普通用户上传/读取脚本契约。
+
+如果需要文本附件，固定写入边界仍在数据库函数层：`app.create_post_with_attachments(...)` 与 `app.create_review_entry_with_attachments(...)` 接收 JSONB attachments，底层把内容写入全局去重的 `app.file_blobs`，再挂到 `app.post_attachments` / `app.review_entry_attachments`。也就是说，MVP 没有“先独立上传、再脱离内容单独管理”的普通用户工作流。
 
 ## Admin skill 与特权操作
 
@@ -173,15 +173,17 @@ erDiagram
     APP_CATEGORIES ||--o{ APP_POSTS : contains
     AUTH_ACCOUNTS ||--o{ APP_POSTS : authors
     APP_POSTS ||--o{ APP_POSTS : improves
+    APP_POSTS ||--o{ APP_POST_ATTACHMENTS : attaches
     APP_POSTS ||--o{ APP_REVIEW_ENTRIES : receives
     AUTH_ACCOUNTS ||--o{ APP_REVIEW_ENTRIES : reviews
+    APP_REVIEW_ENTRIES ||--o{ APP_REVIEW_ENTRY_ATTACHMENTS : attaches
     APP_REVIEW_ENTRIES ||--o{ APP_REVIEW_HISTORY : snapshots
     AUTH_ACCOUNTS ||--o{ APP_REVIEW_HISTORY : replaces
     AUTH_ACCOUNTS ||--o{ APP_TAGS : creates
     APP_POSTS ||--o{ APP_POST_TAGS : tagged_by
     APP_TAGS ||--o{ APP_POST_TAGS : attached_to
-    AUTH_ACCOUNTS ||--o{ APP_UPLOADED_FILES : uploads
-
+    APP_FILE_BLOBS ||--o{ APP_POST_ATTACHMENTS : reused_by
+    APP_FILE_BLOBS ||--o{ APP_REVIEW_ENTRY_ATTACHMENTS : reused_by
     AUTH_ACCOUNTS {
         bigint id PK
         text pg_login_role UK
@@ -220,17 +222,26 @@ erDiagram
         bigint improvement_of FK
         app_verification_state verification
     }
-    APP_UPLOADED_FILES {
+    APP_FILE_BLOBS {
         bigint id PK
-        bigint uploader_account_id FK
-        text filename
         text mime_type
+        text content_sha256 UK
         integer size_bytes
+    }
+    APP_POST_ATTACHMENTS {
+        bigint post_id FK
+        bigint file_blob_id FK
+        integer position
     }
     APP_REVIEW_ENTRIES {
         bigint id PK
         bigint post_id FK
         bigint account_id FK
+    }
+    APP_REVIEW_ENTRY_ATTACHMENTS {
+        bigint review_entry_id FK
+        bigint file_blob_id FK
+        integer position
     }
     APP_REVIEW_HISTORY {
         bigint id PK
@@ -300,7 +311,7 @@ uv run python -m unittest tests.test_create_principal_live_flows -v
 uv run python -m unittest tests.test_content_permission_live_matrix -v
 ```
 
-覆盖 `review_entries`、`review_history`、`tags`、`post_tags` 等 live 读写边界。
+覆盖 `review_entries`、`review_history`、`file_blobs`、`post_attachments`、`review_entry_attachments`、`tags`、`post_tags` 等 live 读写边界。
 
 ## 静态回归测试
 
