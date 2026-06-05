@@ -1310,3 +1310,37 @@ Archived the remaining June 5 Trellis task directories after the attachment/func
 ### Next Steps
 
 - None - task complete
+
+
+## Session 40: Simplify shipped postgres skills
+
+**Date**: 2026-06-05
+**Task**: Simplify shipped postgres skills
+**Branch**: `main`
+
+### Summary
+
+Collapsed the shipped PostgreSQL skill surface into one user-facing skill with two public scripts, updated docs/specs, and verified both positive and negative live paths against the local database.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fcb77c4` | (see git log) |
+| `02ee6be` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
