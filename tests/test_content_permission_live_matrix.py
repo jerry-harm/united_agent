@@ -11,7 +11,7 @@ class LiveContentPermissionDocumentationTest(unittest.TestCase):
 
         self.assertIn("tests/test_content_permission_live_matrix.py", content)
         self.assertIn("uv run python -m unittest tests.test_content_permission_live_matrix -v", content)
-        self.assertIn("python3 -m unittest tests.test_content_permission_live_matrix -v", content)
+        self.assertNotIn("python3 -m unittest tests.test_content_permission_live_matrix -v", content)
         self.assertIn("review_entries", content)
         self.assertIn("review_history", content)
         self.assertIn("tags", content)
@@ -20,18 +20,15 @@ class LiveContentPermissionDocumentationTest(unittest.TestCase):
 
 class LiveContentPermissionMatrixTest(LivePostgresTestCase):
     def test_normal_user_content_read_and_write_boundaries(self) -> None:
-        board_id = self.create_board(slug=self.make_board_slug("content"), title="Content Matrix Board")
+        category_id = self.create_category(slug=self.make_category_slug("content"), title="Content Matrix Category")
         author_role = self.make_login_role("author")
         author_password = f"pw_{self.suffix}_author"
         peer_role = self.make_login_role("peer")
         peer_password = f"pw_{self.suffix}_peer"
-        moderator_role = self.make_login_role("moderator")
-        moderator_password = f"pw_{self.suffix}_moderator"
 
         for login_role, password, display_name in (
             (author_role, author_password, "Content Author"),
             (peer_role, peer_password, "Content Peer"),
-            (moderator_role, moderator_password, "Tag Moderator"),
         ):
             result = self.run_create_principal(
                 actor_user="postgres",
@@ -46,7 +43,7 @@ class LiveContentPermissionMatrixTest(LivePostgresTestCase):
         post_id = self.create_post(
             user=author_role,
             password=author_password,
-            board_id=board_id,
+            category_id=category_id,
             title="Matrix Post",
             body="content matrix body",
         )
@@ -75,20 +72,18 @@ class LiveContentPermissionMatrixTest(LivePostgresTestCase):
                 cursor.execute("SELECT count(*) FROM app.review_history WHERE review_entry_id = %s", (review_entry_id,))
                 self.assertEqual(cursor.fetchone()[0], 1)
 
-        is_admin, is_super_admin, can_write, is_board_moderator, status = self.fetch_role_flags(
+        is_admin, is_super_admin, can_write, status = self.fetch_role_flags(
             user=peer_role,
             password=peer_password,
-            board_id=board_id,
         )
         self.assertFalse(is_admin)
         self.assertFalse(is_super_admin)
         self.assertTrue(can_write)
-        self.assertFalse(is_board_moderator)
         self.assertEqual(status, "active")
 
         with self.connection_for(user=peer_role, password=peer_password) as connection:
             with connection.cursor() as cursor:
-                cursor.execute("SELECT count(*) FROM app.boards WHERE id = %s", (board_id,))
+                cursor.execute("SELECT count(*) FROM app.categories WHERE id = %s", (category_id,))
                 self.assertEqual(cursor.fetchone()[0], 1)
                 cursor.execute("SELECT count(*) FROM app.posts WHERE id = %s", (post_id,))
                 self.assertEqual(cursor.fetchone()[0], 1)
@@ -104,8 +99,8 @@ class LiveContentPermissionMatrixTest(LivePostgresTestCase):
         with self.connection_for(user=peer_role, password=peer_password) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "UPDATE app.boards SET title = %s WHERE id = %s",
-                    ("peer update denied", board_id),
+                    "UPDATE app.categories SET title = %s WHERE id = %s",
+                    ("peer update denied", category_id),
                 )
                 self.assertEqual(cursor.rowcount, 0)
                 connection.rollback()
@@ -156,40 +151,10 @@ class LiveContentPermissionMatrixTest(LivePostgresTestCase):
                     )
                 connection.rollback()
 
-        moderator_account_id = self.fetch_account_id(moderator_role)
-        assign_result = self.run_manage_board_moderator(
-            "assign",
-            actor_user="postgres",
-            actor_password="postgres",
-            board_id=board_id,
-            account_id=moderator_account_id,
-        )
-        self.assertEqual(assign_result.returncode, 0, assign_result.stderr)
-
-        moderator_tag_name = self.make_tag_name("moderator")
-        moderator_tag_id: int
-        with self.connection_for(user=moderator_role, password=moderator_password) as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "INSERT INTO app.tags (name, created_by) VALUES (%s, auth.current_account_id()) RETURNING id",
-                    (moderator_tag_name,),
-                )
-                moderator_tag_id = cursor.fetchone()[0]
-                self.assertIsInstance(moderator_tag_id, int)
-                cursor.execute(
-                    "INSERT INTO app.post_tags (post_id, tag_id) VALUES (%s, %s)",
-                    (post_id, moderator_tag_id),
-                )
-                cursor.execute("DELETE FROM app.post_tags WHERE post_id = %s AND tag_id = %s", (post_id, moderator_tag_id))
-                self.assertEqual(cursor.rowcount, 1)
-                cursor.execute("DELETE FROM app.tags WHERE id = %s", (moderator_tag_id,))
-                self.assertEqual(cursor.rowcount, 1)
-            connection.commit()
-
         admin_post_id = self.create_post(
             user=author_role,
             password=author_password,
-            board_id=board_id,
+            category_id=category_id,
             title="Admin Delete Post",
             body="admin delete coverage",
         )
@@ -226,15 +191,15 @@ class LiveContentPermissionMatrixTest(LivePostgresTestCase):
                 self.assertEqual(cursor.rowcount, 0)
                 connection.rollback()
 
-    def test_disabled_moderator_loses_write_paths_but_not_read_visibility(self) -> None:
-        board_id = self.create_board(slug=self.make_board_slug("disabled"), title="Disabled Moderator Board")
-        moderator_role = self.make_login_role("disabled_moderator")
-        moderator_password = f"pw_{self.suffix}_disabled_moderator"
+    def test_disabled_user_loses_write_paths_but_not_read_visibility(self) -> None:
+        category_id = self.create_category(slug=self.make_category_slug("disabled"), title="Disabled User Category")
+        disabled_role = self.make_login_role("disabled_user")
+        disabled_password = f"pw_{self.suffix}_disabled_user"
         author_role = self.make_login_role("disabled_author")
         author_password = f"pw_{self.suffix}_disabled_author"
 
         for login_role, password, display_name in (
-            (moderator_role, moderator_password, "Disabled Moderator"),
+            (disabled_role, disabled_password, "Disabled User"),
             (author_role, author_password, "Disabled Author"),
         ):
             result = self.run_create_principal(
@@ -247,75 +212,42 @@ class LiveContentPermissionMatrixTest(LivePostgresTestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
 
-        moderator_account_id = self.fetch_account_id(moderator_role)
-        assign_result = self.run_manage_board_moderator(
-            "assign",
-            actor_user="postgres",
-            actor_password="postgres",
-            board_id=board_id,
-            account_id=moderator_account_id,
-        )
-        self.assertEqual(assign_result.returncode, 0, assign_result.stderr)
-
         post_id = self.create_post(
             user=author_role,
             password=author_password,
-            board_id=board_id,
-            title="Disabled Moderator Post",
-            body="post for disabled moderator coverage",
+            category_id=category_id,
+            title="Disabled User Post",
+            body="post for disabled user coverage",
         )
 
-        is_admin, is_super_admin, can_write, is_board_moderator, status = self.fetch_role_flags(
-            user=moderator_role,
-            password=moderator_password,
-            board_id=board_id,
+        is_admin, is_super_admin, can_write, status = self.fetch_role_flags(
+            user=disabled_role,
+            password=disabled_password,
         )
         self.assertFalse(is_admin)
         self.assertFalse(is_super_admin)
         self.assertTrue(can_write)
-        self.assertTrue(is_board_moderator)
         self.assertEqual(status, "active")
 
-        self.set_account_status(moderator_role, "disabled")
+        self.set_account_status(disabled_role, "disabled")
 
-        is_admin, is_super_admin, can_write, is_board_moderator, status = self.fetch_role_flags(
-            user=moderator_role,
-            password=moderator_password,
-            board_id=board_id,
+        is_admin, is_super_admin, can_write, status = self.fetch_role_flags(
+            user=disabled_role,
+            password=disabled_password,
         )
         self.assertFalse(is_admin)
         self.assertFalse(is_super_admin)
         self.assertFalse(can_write)
-        self.assertTrue(is_board_moderator)
         self.assertEqual(status, "disabled")
 
-        with self.connection_for(user=moderator_role, password=moderator_password) as connection:
+        with self.connection_for(user=disabled_role, password=disabled_password) as connection:
             with connection.cursor() as cursor:
-                cursor.execute("SELECT count(*) FROM app.boards WHERE id = %s", (board_id,))
+                cursor.execute("SELECT count(*) FROM app.categories WHERE id = %s", (category_id,))
                 self.assertEqual(cursor.fetchone()[0], 1)
                 cursor.execute("SELECT count(*) FROM app.posts WHERE id = %s", (post_id,))
                 self.assertEqual(cursor.fetchone()[0], 1)
 
-        with self.connection_for(user=moderator_role, password=moderator_password) as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "UPDATE app.posts SET verification = 'verified' WHERE id = %s RETURNING verification",
-                    (post_id,),
-                )
-                self.assertEqual(cursor.rowcount, 0)
-                self.assertIsNone(cursor.fetchone())
-                connection.rollback()
-
-        with self.connection_for(user=moderator_role, password=moderator_password) as connection:
-            with connection.cursor() as cursor:
-                with self.assertRaisesRegex(Exception, "row-level security"):
-                    cursor.execute(
-                        "INSERT INTO app.tags (name, created_by) VALUES (%s, auth.current_account_id())",
-                        (self.make_tag_name("disabled-denied"),),
-                    )
-                connection.rollback()
-
-        with self.connection_for(user=moderator_role, password=moderator_password) as connection:
+        with self.connection_for(user=disabled_role, password=disabled_password) as connection:
             with connection.cursor() as cursor:
                 with self.assertRaisesRegex(Exception, "row-level security"):
                     cursor.execute(
@@ -325,7 +257,7 @@ class LiveContentPermissionMatrixTest(LivePostgresTestCase):
                 connection.rollback()
 
     def test_uploaded_file_permissions_and_constraints(self) -> None:
-        board_id = self.create_board(slug=self.make_board_slug("uploads"), title="Upload Matrix Board")
+        category_id = self.create_category(slug=self.make_category_slug("uploads"), title="Upload Matrix Category")
         uploader_role = self.make_login_role("uploader")
         uploader_password = f"pw_{self.suffix}_uploader"
         peer_role = self.make_login_role("peer_upload")
@@ -371,7 +303,7 @@ class LiveContentPermissionMatrixTest(LivePostgresTestCase):
         post_id = self.create_post(
             user=uploader_role,
             password=uploader_password,
-            board_id=board_id,
+            category_id=category_id,
             title="Post With File URL",
             body=f"body references kb://uploaded-files/{uploaded_file_id}",
         )
@@ -425,3 +357,7 @@ class LiveContentPermissionMatrixTest(LivePostgresTestCase):
                 self.assertEqual(cursor.fetchone()[0], 0)
                 cursor.execute("SELECT body FROM app.posts WHERE id = %s", (post_id,))
                 self.assertIn(f"kb://uploaded-files/{uploaded_file_id}", cursor.fetchone()[0])
+
+
+if __name__ == "__main__":
+    unittest.main()

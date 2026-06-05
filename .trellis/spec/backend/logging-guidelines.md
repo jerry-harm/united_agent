@@ -49,14 +49,14 @@ Do not introduce ad hoc JSON logs or custom log wrappers in one script only.
 
 Current safe output examples:
 
-- listing board moderators from `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_list.sql`
+- listing global-role or registration-token rows from the shipped admin SQL helpers
 - returning newly created account rows from `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql`
 - explicit operator guidance such as missing env var names
 
 If you need to add observability before a server exists, prefer small operator-facing context such as:
 
 - action name
-- target account or board id
+- target account or category id
 - SQL file path being executed
 
 ---

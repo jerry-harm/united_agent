@@ -28,7 +28,6 @@ Real examples:
 - `skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py` raises `SystemExit` when required DB env vars are missing.
 - `skills/agent-kb-postgres-admin/scripts/create_principal.py` raises `SystemExit("login role must match PostgreSQL role naming rules")` for invalid login names.
 - `skills/agent-kb-postgres-admin/scripts/create_principal.py` raises `SystemExit("provide --new-password or set AGENT_KB_NEW_PRINCIPAL_PASSWORD")` when no password is provided.
-- `skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py` raises `SystemExit("--board-id and --account-id are required for assign/revoke")` for incomplete assign/revoke input.
 
 ### SQL policy and integrity failures
 
@@ -36,9 +35,8 @@ Use `RAISE EXCEPTION` inside SQL helpers/functions for permission and domain vio
 
 Real examples:
 
-- `postgres/init/001-united-agent.sql` raises `only admin or super_admin may create accounts` in `auth.create_account_login(...)`.
+- `postgres/init/003-auth-functions.sql` raises `only admin or super_admin may create accounts` in `auth.create_account_login(...)`.
 - `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql` raises `policy violation: admin may create only normal_user accounts`.
-- `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_assign.sql` raises `policy violation: board moderators must be existing normal_user accounts`.
 
 ---
 

@@ -25,7 +25,7 @@ Backend-side state that already exists and should not be misdescribed as fronten
 
 - account identity in `auth.accounts`
 - global role grants in `auth.principal_global_roles`
-- board moderator assignment in `auth.board_moderators`
+- public profile state in `app.profiles`
 - content and review state in `app.*` tables
 
 ---

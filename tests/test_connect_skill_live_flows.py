@@ -49,7 +49,7 @@ class LiveConnectSkillDocumentationTest(unittest.TestCase):
 
         self.assertIn("tests/test_connect_skill_live_flows.py", content)
         self.assertIn("uv run python -m unittest tests.test_connect_skill_live_flows -v", content)
-        self.assertIn("python3 -m unittest tests.test_connect_skill_live_flows -v", content)
+        self.assertNotIn("python3 -m unittest tests.test_connect_skill_live_flows -v", content)
         self.assertIn("verify_connection.py", content)
         self.assertIn("validate_post_flow.py", content)
         self.assertIn("validate_review_flow.py", content)
@@ -120,22 +120,22 @@ class LiveConnectSkillTest(unittest.TestCase):
             text=True,
         )
 
-    def create_board(self, *, slug: str, title: str) -> int:
+    def create_category(self, *, slug: str, title: str) -> int:
         with self.admin_connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    INSERT INTO app.boards (slug, title, description, board_type, created_by)
+                    INSERT INTO app.categories (slug, title, description, category_type, created_by)
                     VALUES (%s, %s, %s, 'discussion', auth.current_account_id())
                     RETURNING id
                     """,
-                    (slug, title, "connect skill validation board"),
+                    (slug, title, "connect skill validation category"),
                 )
-                board_id = cursor.fetchone()[0]
+                category_id = cursor.fetchone()[0]
             connection.commit()
-        return board_id
+        return category_id
 
-    def create_post(self, *, user: str, password: str, board_id: int, title: str, body: str) -> int:
+    def create_post(self, *, user: str, password: str, category_id: int, title: str, body: str) -> int:
         connection_factory = self.admin_connection if user == "postgres" and password == "postgres" else lambda: psycopg.connect(
             host=self.env["AGENT_KB_DB_HOST"],
             port=self.env["AGENT_KB_DB_PORT"],
@@ -147,11 +147,11 @@ class LiveConnectSkillTest(unittest.TestCase):
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    INSERT INTO app.posts (board_id, author_id, content_type, title, body)
+                    INSERT INTO app.posts (category_id, author_id, content_type, title, body)
                     VALUES (%s, auth.current_account_id(), %s, %s, %s)
                     RETURNING id
                     """,
-                    (board_id, "text/plain", title, body),
+                    (category_id, "text/plain", title, body),
                 )
                 post_id = cursor.fetchone()[0]
             connection.commit()
@@ -225,14 +225,14 @@ class LiveConnectSkillTest(unittest.TestCase):
         self.assertIn("is not active: disabled", result.stderr)
 
     def test_validate_post_flow_script_reports_success_for_normal_user(self) -> None:
-        board_slug = f"connect-post-{uuid.uuid4().hex[:8]}"
+        category_slug = f"connect-post-{uuid.uuid4().hex[:8]}"
         login_role = f"connect_post_{uuid.uuid4().hex[:8]}"
         password = f"pw_{uuid.uuid4().hex[:8]}"
         self.create_principal(login_role=login_role, password=password, display_name="Connect Post User")
-        board_id = self.create_board(slug=board_slug, title="Connect Post Board")
+        category_id = self.create_category(slug=category_slug, title="Connect Post Category")
 
         result = subprocess.run(
-            ["python3", str(VALIDATE_POST_FLOW_SCRIPT), "--board-id", str(board_id)],
+            ["python3", str(VALIDATE_POST_FLOW_SCRIPT), "--category-id", str(category_id)],
             cwd=ROOT,
             env=self.env | {"AGENT_KB_DATABASE_URL": f"postgres://{login_role}:{password}@{self.env['AGENT_KB_DB_HOST']}:{self.env['AGENT_KB_DB_PORT']}/{self.env['AGENT_KB_DB_NAME']}"},
             check=False,
@@ -245,12 +245,12 @@ class LiveConnectSkillTest(unittest.TestCase):
         self.assertIn("post created", result.stdout)
 
     def test_validate_review_flow_script_reports_success_for_normal_user(self) -> None:
-        board_slug = f"connect-review-{uuid.uuid4().hex[:8]}"
+        category_slug = f"connect-review-{uuid.uuid4().hex[:8]}"
         login_role = f"connect_review_{uuid.uuid4().hex[:8]}"
         password = f"pw_{uuid.uuid4().hex[:8]}"
         self.create_principal(login_role=login_role, password=password, display_name="Connect Review User")
-        board_id = self.create_board(slug=board_slug, title="Connect Review Board")
-        post_id = self.create_post(user=login_role, password=password, board_id=board_id, title="Review target", body="body")
+        category_id = self.create_category(slug=category_slug, title="Connect Review Category")
+        post_id = self.create_post(user=login_role, password=password, category_id=category_id, title="Review target", body="body")
 
         result = subprocess.run(
             ["python3", str(VALIDATE_REVIEW_FLOW_SCRIPT), "--post-id", str(post_id)],

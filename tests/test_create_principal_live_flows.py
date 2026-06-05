@@ -11,7 +11,7 @@ class LiveCreatePrincipalDocumentationTest(unittest.TestCase):
 
         self.assertIn("tests/test_create_principal_live_flows.py", content)
         self.assertIn("uv run python -m unittest tests.test_create_principal_live_flows -v", content)
-        self.assertIn("python3 -m unittest tests.test_create_principal_live_flows -v", content)
+        self.assertNotIn("python3 -m unittest tests.test_create_principal_live_flows -v", content)
         self.assertIn("create_principal.py", content)
         self.assertIn("manage_account.py", content)
         self.assertIn("manage_global_role.py", content)
@@ -233,11 +233,11 @@ class LiveCreatePrincipalFlowTest(LivePostgresTestCase):
         )
         self.assertEqual(create_second_admin.returncode, 0, create_second_admin.stderr)
 
-        board_id = self.create_board(slug=self.make_board_slug("delete"), title="Delete Target Board")
+        category_id = self.create_category(slug=self.make_category_slug("delete"), title="Delete Target Category")
         post_id = self.create_post(
             user=target_role,
             password=target_password,
-            board_id=board_id,
+            category_id=category_id,
             title="Delete flow post",
             body="delete flow body",
         )

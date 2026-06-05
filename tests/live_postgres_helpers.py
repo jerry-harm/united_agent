@@ -16,7 +16,6 @@ except ModuleNotFoundError:  # pragma: no cover - environment-dependent
 
 ROOT = Path(__file__).resolve().parents[1]
 CREATE_PRINCIPAL_SCRIPT = ROOT / "skills/agent-kb-postgres-admin/scripts/create_principal.py"
-MANAGE_MODERATOR_SCRIPT = ROOT / "skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py"
 MANAGE_ACCOUNT_SCRIPT = ROOT / "skills/agent-kb-postgres-admin/scripts/manage_account.py"
 MANAGE_GLOBAL_ROLE_SCRIPT = ROOT / "skills/agent-kb-postgres-admin/scripts/manage_global_role.py"
 
@@ -66,7 +65,7 @@ class LivePostgresTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.suffix = uuid.uuid4().hex[:8]
         self.created_roles: set[str] = set()
-        self.created_board_slugs: set[str] = set()
+        self.created_category_slugs: set[str] = set()
         self.created_tag_names: set[str] = set()
         self.created_uploaded_file_ids: set[int] = set()
 
@@ -74,10 +73,10 @@ class LivePostgresTestCase(unittest.TestCase):
         with self.admin_connection(autocommit=True) as connection:
             with connection.cursor() as cursor:
                 account_ids = self.account_ids_for_cleanup(cursor)
-                board_ids = self.board_ids_for_cleanup(cursor)
+                category_ids = self.category_ids_for_cleanup(cursor)
                 tag_ids = self.tag_ids_for_cleanup(cursor)
                 uploaded_file_ids = self.uploaded_file_ids_for_cleanup(cursor, account_ids)
-                post_ids = self.post_ids_for_cleanup(cursor, account_ids, board_ids)
+                post_ids = self.post_ids_for_cleanup(cursor, account_ids, category_ids)
                 review_entry_ids = self.review_entry_ids_for_cleanup(cursor, account_ids, post_ids)
 
                 if post_ids or tag_ids:
@@ -94,23 +93,18 @@ class LivePostgresTestCase(unittest.TestCase):
                         "DELETE FROM app.review_entries WHERE id = ANY(%s) OR post_id = ANY(%s) OR account_id = ANY(%s)",
                         (review_entry_ids, post_ids, account_ids),
                     )
-                if post_ids or board_ids or account_ids:
+                if post_ids or category_ids or account_ids:
                     cursor.execute(
-                        "DELETE FROM app.posts WHERE id = ANY(%s) OR board_id = ANY(%s) OR author_id = ANY(%s)",
-                        (post_ids, board_ids, account_ids),
+                        "DELETE FROM app.posts WHERE id = ANY(%s) OR category_id = ANY(%s) OR author_id = ANY(%s)",
+                        (post_ids, category_ids, account_ids),
                     )
                 if tag_ids or account_ids:
                     cursor.execute(
                         "DELETE FROM app.tags WHERE id = ANY(%s) OR created_by = ANY(%s)",
                         (tag_ids, account_ids),
                     )
-                if board_ids or account_ids:
-                    cursor.execute(
-                        "DELETE FROM auth.board_moderators WHERE board_id = ANY(%s) OR account_id = ANY(%s)",
-                        (board_ids, account_ids),
-                    )
-                if board_ids:
-                    cursor.execute("DELETE FROM app.boards WHERE id = ANY(%s)", (board_ids,))
+                if category_ids:
+                    cursor.execute("DELETE FROM app.categories WHERE id = ANY(%s)", (category_ids,))
                 if account_ids:
                     cursor.execute("DELETE FROM auth.principal_global_roles WHERE account_id = ANY(%s)", (account_ids,))
                     cursor.execute("DELETE FROM auth.accounts WHERE id = ANY(%s)", (account_ids,))
@@ -126,12 +120,12 @@ class LivePostgresTestCase(unittest.TestCase):
         )
         return [row[0] for row in cursor.fetchall()]
 
-    def board_ids_for_cleanup(self, cursor: psycopg.Cursor) -> list[int]:
-        if not self.created_board_slugs:
+    def category_ids_for_cleanup(self, cursor: psycopg.Cursor) -> list[int]:
+        if not self.created_category_slugs:
             return []
         cursor.execute(
-            "SELECT id FROM app.boards WHERE slug = ANY(%s)",
-            (sorted(self.created_board_slugs),),
+            "SELECT id FROM app.categories WHERE slug = ANY(%s)",
+            (sorted(self.created_category_slugs),),
         )
         return [row[0] for row in cursor.fetchall()]
 
@@ -144,10 +138,10 @@ class LivePostgresTestCase(unittest.TestCase):
         )
         return [row[0] for row in cursor.fetchall()]
 
-    def post_ids_for_cleanup(self, cursor: psycopg.Cursor, account_ids: list[int], board_ids: list[int]) -> list[int]:
+    def post_ids_for_cleanup(self, cursor: psycopg.Cursor, account_ids: list[int], category_ids: list[int]) -> list[int]:
         cursor.execute(
-            "SELECT id FROM app.posts WHERE board_id = ANY(%s) OR author_id = ANY(%s)",
-            (board_ids, account_ids),
+            "SELECT id FROM app.posts WHERE category_id = ANY(%s) OR author_id = ANY(%s)",
+            (category_ids, account_ids),
         )
         return [row[0] for row in cursor.fetchall()]
 
@@ -190,9 +184,9 @@ class LivePostgresTestCase(unittest.TestCase):
         role_name = f"lp_{label}_{self.suffix}".replace("-", "_")
         return role_name[:63]
 
-    def make_board_slug(self, label: str) -> str:
+    def make_category_slug(self, label: str) -> str:
         slug = f"live-{label}-{self.suffix}"
-        self.created_board_slugs.add(slug)
+        self.created_category_slugs.add(slug)
         return slug
 
     def make_tag_name(self, label: str) -> str:
@@ -254,29 +248,6 @@ class LivePostgresTestCase(unittest.TestCase):
             check=check,
         )
 
-    def run_manage_board_moderator(
-        self,
-        action: str,
-        *,
-        actor_user: str,
-        actor_password: str,
-        board_id: int | None = None,
-        account_id: int | None = None,
-        check: bool = False,
-    ) -> subprocess.CompletedProcess[str]:
-        args = [action]
-        if board_id is not None:
-            args.extend(["--board-id", str(board_id)])
-        if account_id is not None:
-            args.extend(["--account-id", str(account_id)])
-        return self.run_python_script(
-            MANAGE_MODERATOR_SCRIPT,
-            args,
-            user=actor_user,
-            password=actor_password,
-            check=check,
-        )
-
     def run_manage_account(
         self,
         action: str,
@@ -317,32 +288,32 @@ class LivePostgresTestCase(unittest.TestCase):
             check=check,
         )
 
-    def create_board(self, *, slug: str | None = None, title: str = "Live Board", description: str = "integration board") -> int:
-        board_slug = slug or self.make_board_slug("board")
+    def create_category(self, *, slug: str | None = None, title: str = "Live Category", description: str = "integration category") -> int:
+        category_slug = slug or self.make_category_slug("category")
         with self.admin_connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    INSERT INTO app.boards (slug, title, description, board_type, created_by)
+                    INSERT INTO app.categories (slug, title, description, category_type, created_by)
                     VALUES (%s, %s, %s, 'discussion', auth.current_account_id())
                     RETURNING id
                     """,
-                    (board_slug, title, description),
+                    (category_slug, title, description),
                 )
-                board_id = cursor.fetchone()[0]
+                category_id = cursor.fetchone()[0]
             connection.commit()
-        return board_id
+        return category_id
 
-    def create_post(self, *, user: str, password: str, board_id: int, title: str, body: str) -> int:
+    def create_post(self, *, user: str, password: str, category_id: int, title: str, body: str) -> int:
         with self.connection_for(user=user, password=password) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    INSERT INTO app.posts (board_id, author_id, content_type, title, body)
+                    INSERT INTO app.posts (category_id, author_id, content_type, title, body)
                     VALUES (%s, auth.current_account_id(), %s, %s, %s)
                     RETURNING id
                     """,
-                    (board_id, "text/plain", title, body),
+                    (category_id, "text/plain", title, body),
                 )
                 post_id = cursor.fetchone()[0]
             connection.commit()
@@ -420,21 +391,14 @@ class LivePostgresTestCase(unittest.TestCase):
                 )
             connection.commit()
 
-    def fetch_role_flags(self, *, user: str, password: str, board_id: int | None = None) -> tuple[bool, bool, bool, bool | None, str]:
+    def fetch_role_flags(self, *, user: str, password: str) -> tuple[bool, bool, bool, str]:
         with self.connection_for(user=user, password=password) as connection:
             with connection.cursor() as cursor:
-                if board_id is None:
-                    cursor.execute(
-                        "SELECT auth.is_admin(), auth.is_super_admin(), auth.can_write(), auth.current_account_status()::text"
-                    )
-                    is_admin, is_super_admin, can_write, status = cursor.fetchone()
-                    return is_admin, is_super_admin, can_write, None, status
                 cursor.execute(
-                    "SELECT auth.is_admin(), auth.is_super_admin(), auth.can_write(), auth.is_board_moderator(%s), auth.current_account_status()::text",
-                    (board_id,),
+                    "SELECT auth.is_admin(), auth.is_super_admin(), auth.can_write(), auth.current_account_status()::text"
                 )
-                is_admin, is_super_admin, can_write, is_board_moderator, status = cursor.fetchone()
-                return is_admin, is_super_admin, can_write, is_board_moderator, status
+                is_admin, is_super_admin, can_write, status = cursor.fetchone()
+                return is_admin, is_super_admin, can_write, status
 
     def assert_write_denied(self, operation) -> Exception | None:
         try:

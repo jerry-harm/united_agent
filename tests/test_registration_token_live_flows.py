@@ -21,16 +21,6 @@ REGISTER_WITH_TOKEN_SCRIPT = ROOT / "skills/agent-kb-postgres-connect/scripts/re
 
 
 class RegistrationTokenLiveFlowTest(LivePostgresTestCase):
-    def create_registration_login(self, *, login_role: str, password: str) -> None:
-        self.created_roles.add(login_role)
-        with self.admin_connection() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    sql.SQL("CREATE ROLE {} LOGIN PASSWORD {}")
-                    .format(sql.Identifier(login_role), sql.Literal(password))
-                )
-            connection.commit()
-
     def run_manage_registration_token(
         self,
         action: str,
@@ -68,7 +58,11 @@ class RegistrationTokenLiveFlowTest(LivePostgresTestCase):
         display_name: str,
     ) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
-        env["AGENT_KB_DATABASE_URL"] = f"postgres://{db_user}:{db_password}@localhost:5432/united_agent"
+        env["AGENT_KB_DATABASE_URL"] = (
+            f"postgres://{db_user}:{db_password}"
+            f"@{self.env['AGENT_KB_DB_HOST']}:{self.env['AGENT_KB_DB_PORT']}"
+            f"/{self.env['AGENT_KB_DB_NAME']}"
+        )
         env["AGENT_KB_NEW_PASSWORD"] = password
         return subprocess.run(
             [
@@ -107,17 +101,13 @@ class RegistrationTokenLiveFlowTest(LivePostgresTestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         token = self.extract_token(result.stdout)
 
-        registration_login = self.make_login_role("registration_guest")
-        registration_password = f"pw_{self.suffix}_registration_guest"
-        self.create_registration_login(login_role=registration_login, password=registration_password)
-
         login_role_one = self.make_login_role("reg1")
         login_role_two = self.make_login_role("reg2")
         self.created_roles.update({login_role_one, login_role_two})
 
         register_one = self.run_register_with_token(
-            db_user=registration_login,
-            db_password=registration_password,
+            db_user="guest",
+            db_password="guest",
             token=token,
             login_role=login_role_one,
             password=f"pw_{self.suffix}_1",
@@ -127,8 +117,8 @@ class RegistrationTokenLiveFlowTest(LivePostgresTestCase):
         self.assertIn("registration ok", register_one.stdout)
 
         register_two = self.run_register_with_token(
-            db_user=registration_login,
-            db_password=registration_password,
+            db_user="guest",
+            db_password="guest",
             token=token,
             login_role=login_role_two,
             password=f"pw_{self.suffix}_2",
@@ -139,8 +129,8 @@ class RegistrationTokenLiveFlowTest(LivePostgresTestCase):
         login_role_three = self.make_login_role("reg3")
         self.created_roles.add(login_role_three)
         register_three = self.run_register_with_token(
-            db_user=registration_login,
-            db_password=registration_password,
+            db_user="guest",
+            db_password="guest",
             token=token,
             login_role=login_role_three,
             password=f"pw_{self.suffix}_3",
@@ -168,7 +158,7 @@ class RegistrationTokenLiveFlowTest(LivePostgresTestCase):
             check=False,
         )
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("not admin", result.stderr)
+        self.assertIn("only active admin or super_admin may create registration tokens", result.stderr)
 
 
 if __name__ == "__main__":

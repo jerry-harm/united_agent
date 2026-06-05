@@ -24,13 +24,18 @@ Do not invent `src/routes`, `src/services`, or ORM directories in specs or docs 
 ```text
 postgres/
 └── init/
-    └── 001-united-agent.sql
+    ├── 001-schema.sql
+    ├── 002-tables.sql
+    ├── 003-auth-functions.sql
+    ├── 004-app-functions-and-triggers.sql
+    ├── 005-permissions-and-rls.sql
+    └── 006-bootstrap-and-seed.sql
 
 pyproject.toml
 
 tests/
 ├── test_agent_kb_postgres_skeleton.py
-├── test_board_post_live_flows.py
+├── test_category_post_live_flows.py
 ├── test_postgres_admin_tooling.py
 ├── test_postgres_connect_tooling.py
 └── test_connect_skill_live_flows.py
@@ -49,31 +54,26 @@ skills/
 │       ├── _postgres_admin_common.py
 │       ├── create_principal.py
 │       ├── manage_account.py
-│       ├── manage_board_moderator.py
 │       ├── manage_global_role.py
 │       └── sql/
 │           ├── create_principal.sql
 │           ├── manage_account_delete.sql
 │           ├── manage_account_disable.sql
-│           ├── manage_board_moderator_assign.sql
 │           ├── manage_global_role_grant.sql
 │           ├── manage_global_role_list.sql
-│           ├── manage_global_role_revoke.sql
-│           ├── manage_board_moderator_revoke.sql
-│           └── manage_board_moderator_list.sql
+│           └── manage_global_role_revoke.sql
 ```
 
 ---
 
 ## Module Organization
 
-- Put core data model, RLS policies, triggers, and helper functions in `postgres/init/001-united-agent.sql`.
+- Split PostgreSQL bootstrap into a small set of ordered top-level files under `postgres/init/`, grouped by responsibility (schema, tables, auth functions, app functions/triggers, permissions/RLS, bootstrap/seed).
 - Put repository-wide Python dependency metadata in the repo-root `pyproject.toml` only when it reflects real shipped script/test needs; keep it dependency-only and do not invent a packaged app layout.
 - Put reusable Python connection/env/SQL-rendering helpers inside the shipped skill that owns the workflow, e.g. `skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py`.
 - Put one operator-facing CLI entrypoint per operation family under the relevant skill's `scripts/` directory.
   - `skills/agent-kb-postgres-admin/scripts/create_principal.py` handles account creation.
   - `skills/agent-kb-postgres-admin/scripts/manage_account.py` handles account disable/delete lifecycle operations.
-  - `skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py` handles moderator assignment/revoke/list.
   - `skills/agent-kb-postgres-admin/scripts/manage_global_role.py` handles global-role grant/revoke/list.
 - For ordinary-user distributed verification flows, bundle connection helpers under the connect skill directory rather than relying on inline heredoc snippets in `SKILL.md`.
   - `skills/agent-kb-postgres-connect/scripts/verify_connection.py` handles connection and identity verification.
@@ -89,17 +89,22 @@ There are currently **no** HTTP handlers, background workers, or ORM model modul
 
 ## Naming Conventions
 
-- SQL bootstrap files: numeric prefix + project slug, e.g. `001-united-agent.sql`.
+- SQL bootstrap files: numeric prefix + responsibility slug, e.g. `001-schema.sql`, `006-bootstrap-and-seed.sql`.
 - Python scripts: snake_case filenames matching the operation, e.g. `create_principal.py`.
 - Shared Python helpers: underscore-prefixed module for internal reuse, e.g. `_postgres_admin_common.py`.
-- SQL helper files: snake_case and action-oriented, e.g. `manage_board_moderator_assign.sql`.
+- SQL helper files: snake_case and action-oriented, e.g. `manage_global_role_grant.sql`.
 - Tests: `test_<area>.py` using `unittest.TestCase` classes.
 
 ---
 
 ## Examples
 
-- `postgres/init/001-united-agent.sql` centralizes schema, helper functions, triggers, grants, and RLS.
+- `postgres/init/001-schema.sql` resets managed schemas, locks down `public`, creates the shared runtime role, and defines enums.
+- `postgres/init/002-tables.sql` defines tables, the upload MIME helper needed by table constraints, and indexes.
+- `postgres/init/003-auth-functions.sql` defines auth/account-management helpers.
+- `postgres/init/004-app-functions-and-triggers.sql` defines app-layer triggers, file URL helpers, and ranking views.
+- `postgres/init/005-permissions-and-rls.sql` defines grants, column privileges, RLS enablement, and policies.
+- `postgres/init/006-bootstrap-and-seed.sql` provisions bootstrap identities, default categories, and the startup announcement.
 - `pyproject.toml` is a repository-local uv manifest for script/test dependencies, not a declaration of an application server or publishable Python package.
 - `skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py` provides shared env loading, SQL templating, and transaction execution for shipped admin workflows.
 - `skills/agent-kb-postgres-admin/scripts/create_principal.py` is a thin CLI that validates inputs and delegates to `skills/agent-kb-postgres-admin/scripts/sql/create_principal.sql`.

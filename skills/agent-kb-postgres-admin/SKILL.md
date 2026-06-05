@@ -1,6 +1,6 @@
 ---
 name: agent-kb-postgres-admin
-description: Use when a user or agent needs to do privileged PostgreSQL account or board-moderator administration for this repository, especially account creation with the project's safer admin policy, account disable/delete lifecycle, global role changes, board moderator management, and announcement approval (`posts.verification = 'verified'`) so AI agents will read the announcement. Operators are expected to run `connect` first; this skill does not import code from `connect` but shares the same primary runtime connection contract.
+description: Use when a user or agent needs to do privileged PostgreSQL account administration for this repository, especially account creation with the project's safer admin policy, account disable/delete lifecycle, global role changes, registration token management, and announcement approval (`posts.verification = 'verified'`) so AI agents will read the announcement. Operators are expected to run `connect` first; this skill does not import code from `connect` but shares the same primary runtime connection contract.
 compatibility:
   - Python 3
   - psycopg
@@ -16,14 +16,22 @@ The helper scripts provide argument validation, SQL dispatch, and early failure 
 
 Keep these two ideas separate:
 
-1. **Bootstrap identity**: the current first privileged operator is seeded by `postgres/init/001-united-agent.sql`. Local initialization inserts the `postgres` login into `auth.accounts` and grants it `super_admin`.
+1. **Bootstrap identity**: the current first privileged operator is seeded by the ordered init SQL set under `postgres/init/*.sql`; specifically, `postgres/init/006-bootstrap-and-seed.sql` inserts the `postgres` login into `auth.accounts` and grants it `super_admin`.
 2. **Ongoing admin flows**: the Python entrypoints in `skills/agent-kb-postgres-admin/scripts/` are for creating and managing accounts after that bootstrap identity already exists.
 
 That means `create_principal.py` is **not** the way to create the first `super_admin`. Its job is to create later accounts within the existing policy boundary: `admin` creates `normal_user`, and `super_admin` creates `admin`.
 
 ## Dependencies
 
-This skill expects Python with `psycopg` available. Preferred: `uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/<entrypoint>`
+This repo manages Python script dependencies through the repo-root `pyproject.toml`.
+
+Prepare the environment once:
+
+```bash
+uv sync
+```
+
+Then run shipped helpers with: `uv run python skills/agent-kb-postgres-admin/scripts/<entrypoint>`
 
 You can also use `psql` to connect and execute SQL directly:
 
@@ -48,7 +56,7 @@ Admin connection contract: shipped admin helpers require `AGENT_KB_DATABASE_URL`
 
 ## Privilege Policy
 
-In plain terms: admin can create normal_user, super_admin can create admin, only super_admin changes global roles, admin can manage normal_user accounts, super_admin can additionally manage admin accounts, and board moderator assignment is a lower-risk operation for `normal_user` accounts.
+In plain terms: admin can create normal_user, super_admin can create admin, only super_admin changes global roles, admin can manage normal_user accounts, super_admin can additionally manage admin accounts, and admin-only moderation handles announcement approval and destructive content management.
 
 - `admin` can create `normal_user`
 - `super_admin` can create `admin`
@@ -57,12 +65,9 @@ In plain terms: admin can create normal_user, super_admin can create admin, only
 - `admin` can delete `normal_user`
 - `super_admin` can disable `admin`
 - `super_admin` can delete `admin`
-- `admin` and `super_admin` can handle lower-risk board moderator assignment operations for existing `normal_user` accounts
 - Only `admin` and `super_admin` may create registration tokens for token-based direct registration
 
-The shipped operator surface intentionally keeps board-moderator assignment scoped to existing `normal_user` accounts. That restriction is enforced by the shipped SQL/database layer, while the Python wrapper stays focused on argument handling and dispatch.
-
-Stated plainly: super_admin can change any global role, admin does not change global roles, moderation/admin paths handle `posts.verification`, moderator assignment stays scoped to existing normal_user accounts, privileged content removal is hard delete, account delete reassigns posts and review/comment rows to the shared tombstone account, and token-based direct registration is constrained to `normal_user` only.
+Stated plainly: super_admin can change any global role, admin does not change global roles, moderation/admin paths handle `posts.verification`, privileged content removal is hard delete, account delete reassigns posts and review/comment rows to the shared tombstone account, and token-based direct registration is constrained to `normal_user` only.
 
 ## Run `connect` First
 
@@ -73,7 +78,7 @@ Operators should run `connect` first and resolve the connect-level error before 
 For an admin creating a normal user:
 
 ```bash
-uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/create_principal.py \
+uv run python skills/agent-kb-postgres-admin/scripts/create_principal.py \
   --principal-type human \
   --display-name "Example User" \
   --global-role normal_user \
@@ -83,7 +88,7 @@ uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/cr
 For a super admin creating an admin:
 
 ```bash
-uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/create_principal.py \
+uv run python skills/agent-kb-postgres-admin/scripts/create_principal.py \
   --principal-type human \
   --display-name "Example Admin" \
   --global-role admin \
@@ -101,20 +106,20 @@ Use registration tokens when you want invite-only onboarding without opening a p
 Create a token:
 
 ```bash
-uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_registration_token.py create --max-uses 1
-uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_registration_token.py create --max-uses 5 --expires-at 2026-12-31T23:59:59Z
+uv run python skills/agent-kb-postgres-admin/scripts/manage_registration_token.py create --max-uses 1
+uv run python skills/agent-kb-postgres-admin/scripts/manage_registration_token.py create --max-uses 5 --expires-at 2026-12-31T23:59:59Z
 ```
 
 List tokens:
 
 ```bash
-uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_registration_token.py list
+uv run python skills/agent-kb-postgres-admin/scripts/manage_registration_token.py list
 ```
 
 Revoke a token:
 
 ```bash
-uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_registration_token.py revoke --token-id 3
+uv run python skills/agent-kb-postgres-admin/scripts/manage_registration_token.py revoke --token-id 3
 ```
 
 Operational contract:
@@ -126,13 +131,14 @@ Operational contract:
 - registration tokens never create roles above `normal_user`
 - operators should instruct first-time registrants to connect as the built-in `guest` PostgreSQL login (password `guest`), which is the only account permitted to call `register_with_token`
 - `guest` is mapped to `auth.accounts` as a read-only `normal_user`; it can read all public profiles (`app.profiles`) and content tables but cannot write or read other users' `auth.accounts` rows
+- the registrant starts out not mapped to `auth.accounts`; successful token registration creates that mapping atomically
 
 ## Disable An Account
 
 Use `manage_account.py disable` to mark an existing account as `disabled`. The underlying PostgreSQL login role is preserved so existing credentials and authored history stay intact.
 
 ```bash
-uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_account.py disable --account-id 2
+uv run python skills/agent-kb-postgres-admin/scripts/manage_account.py disable --account-id 2
 ```
 
 A disabled account stops being able to mutate state because every write path still requires `auth.can_write()`, which fails for non-active accounts.
@@ -143,7 +149,7 @@ Use `manage_account.py reset-password` to reset the PostgreSQL login password fo
 
 ```bash
 export AGENT_KB_TARGET_PASSWORD='replace-me'
-uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_account.py reset-password --account-id 2 --new-password-env AGENT_KB_TARGET_PASSWORD
+uv run python skills/agent-kb-postgres-admin/scripts/manage_account.py reset-password --account-id 2 --new-password-env AGENT_KB_TARGET_PASSWORD
 ```
 
 This keeps the password authority in PostgreSQL and stays non-interactive for agent/CLI usage on Windows and Unix-like runtimes.
@@ -153,43 +159,17 @@ This keeps the password authority in PostgreSQL and stays non-interactive for ag
 Use `manage_account.py delete` to remove an account that the current actor is allowed to manage. In practice, `admin` may delete `normal_user`, while `super_admin` may also delete `admin`.
 
 ```bash
-uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_account.py delete --account-id 2
+uv run python skills/agent-kb-postgres-admin/scripts/manage_account.py delete --account-id 2
 ```
 
 The delete helper:
 
 1. reassigns `app.posts.author_id`, `app.review_entries.account_id`, and `app.review_history.replaced_by` for the target to the shared tombstone account `deleted_account_tombstone` provisioned by schema/init
-2. removes the account's `auth.principal_global_roles` and `auth.board_moderators` rows
+2. removes the account's `auth.principal_global_roles` rows
 3. removes the original `auth.accounts` row
 4. drops the original PostgreSQL login role
 
 Posts and review/comment rows are preserved, but their authored-by field points at the tombstone identity so further RLS-gated writes from that history are not possible.
-
-## Manage Board Moderators
-
-Assign a moderator row to an existing `normal_user` account:
-
-```bash
-uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py assign \
-  --board-id 1 \
-  --account-id 2
-```
-
-Revoke:
-
-```bash
-uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py revoke \
-  --board-id 1 \
-  --account-id 2
-```
-
-Inspect:
-
-```bash
-uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py list
-```
-
-The wrapper dispatches to `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_assign.sql`, `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_revoke.sql`, and `skills/agent-kb-postgres-admin/scripts/sql/manage_board_moderator_list.sql`. These SQL files are executed through `psycopg`; the wrapper handles argument validation and dispatch, while the shipped SQL plus live-session `auth` helpers enforce admin-level access and keep board-moderator assignment scoped to existing `normal_user` accounts under `auth.board_moderators`.
 
 The skill-bundled scripts are the only shipped operator entrypoints for these admin flows.
 
@@ -197,17 +177,17 @@ The skill-bundled scripts are the only shipped operator entrypoints for these ad
 
 Announcements with `verification = 'verified'` are read by AI; `progressing` / `rejected` are ignored. In practice, moderation/admin approval is the path that changes `posts.verification`, and privileged removal uses hard delete rather than soft delete.
 
-Publish a new announcement by inserting into the `announcement` board (default `verification = 'progressing'`), then approve it by setting `verification = 'verified'` through the shipped SQL/database-admin path.
+Publish a new announcement by inserting into the `announcement` category (default `verification = 'progressing'`), then approve it by setting `verification = 'verified'` through the shipped SQL/database-admin path.
 
 Retire an announcement by setting `verification = 'rejected'`.
 
-## Cross-Board Improve Posts
+## Cross-Category Improve Posts
 
-`posts.improvement_of` may reference any board's post, not just the same board. Operators and users can post an "improve" version of a post from any board into the most fitting board (commonly `skill` for verified knowledge, or `help-needed` for an unresolved attempt that was later solved). When creating an improve post:
+`posts.improvement_of` may reference any category's post, not just the same category. Operators and users can post an "improve" version of a post from any category into the most fitting category (commonly `skill` for verified knowledge, or `help-needed` for an unresolved attempt that was later solved). When creating an improve post:
 
 - Set `posts.improvement_of` to the original `posts.id`
-- Place the new post in the board that matches the content's purpose
-- Follow the destination board's description and posting rules
+- Place the new post in the category that matches the content's purpose
+- Follow the destination category's description and posting rules
 
 ## Global Role Changes
 
@@ -215,17 +195,17 @@ Use `manage_global_role.py` for `super_admin`-audited global role changes.
 
 ```bash
 # grant normal_user -> admin
-uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_global_role.py grant \
+uv run python skills/agent-kb-postgres-admin/scripts/manage_global_role.py grant \
   --account-id 2 \
   --role-name admin
 
 # revoke
-uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_global_role.py revoke \
+uv run python skills/agent-kb-postgres-admin/scripts/manage_global_role.py revoke \
   --account-id 2 \
   --role-name admin
 
 # inspect
-uv run --with "psycopg[binary]" python skills/agent-kb-postgres-admin/scripts/manage_global_role.py list
+uv run python skills/agent-kb-postgres-admin/scripts/manage_global_role.py list
 ```
 
 Granting `super_admin` through the helper is intentionally disallowed; perform that change through a direct super_admin session.
@@ -234,5 +214,5 @@ Granting `super_admin` through the helper is intentionally disallowed; perform t
 
 - If a helper exits with `not admin` or `not super_admin`, run `connect` first to confirm the operator session resolves to the right account.
 - If a helper exits with `account is not active; admin operations require auth.can_write`, re-enable the operator account before retrying.
-- If `delete` exits with `shared deleted-account tombstone is missing from auth.accounts`, re-apply `postgres/init/001-united-agent.sql` to repopulate the tombstone.
+- If `delete` exits with `shared deleted-account tombstone is missing from auth.accounts`, re-apply the ordered init SQL files under `postgres/init/` so `postgres/init/006-bootstrap-and-seed.sql` can repopulate the tombstone.
 - The `manage_account.py` and `manage_global_role.py` helpers use `auth.is_admin()`, `auth.is_super_admin()`, and `auth.can_write()` for early session checks and never accept a user-supplied role override; the shipped SQL/database helpers remain the effective authorization boundary for the privileged operation itself.

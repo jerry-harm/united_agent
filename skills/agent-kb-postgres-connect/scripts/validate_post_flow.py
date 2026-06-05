@@ -21,7 +21,7 @@ SUCCESS_MARKER = "post flow ok"
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default=None, help="Database connection URL (reads AGENT_KB_DATABASE_URL env var if not given)")
-    parser.add_argument("--board-id", type=int, required=True)
+    parser.add_argument("--category-id", type=int, required=True)
     parser.add_argument("--title", default="hello from connect skill")
     parser.add_argument("--body", default="posted via validate_post_flow.py")
     return parser.parse_args()
@@ -41,17 +41,17 @@ def main() -> int:
 
             cursor.execute(
                 """
-                INSERT INTO app.posts (board_id, author_id, content_type, title, body)
+                INSERT INTO app.posts (category_id, author_id, content_type, title, body)
                 VALUES (%s, auth.current_account_id(), 'text/plain', %s, %s)
-                RETURNING id, board_id, author_id, verification
+                RETURNING id, category_id, author_id, verification
                 """,
-                (args.board_id, args.title, args.body),
+                (args.category_id, args.title, args.body),
             )
-            post_id, board_id, author_id, verification = cursor.fetchone()
+            post_id, category_id, author_id, verification = cursor.fetchone()
 
             cursor.execute(
                 """
-                SELECT id, board_id, author_id, verification
+                SELECT id, category_id, author_id, verification
                 FROM app.posts
                 WHERE id = %s
                 """,
@@ -60,13 +60,13 @@ def main() -> int:
             roundtrip = cursor.fetchone()
         connection.commit()
 
-    if roundtrip != (post_id, board_id, author_id, verification):
+    if roundtrip != (post_id, category_id, author_id, verification):
         raise SystemExit("post insert roundtrip mismatch")
 
     print(SUCCESS_MARKER)
     print(f"post_id={post_id}")
     print("post created")
-    print(f"board_id={board_id}")
+    print(f"category_id={category_id}")
     print(f"author_id={author_id}")
     print(f"verification={verification}")
     return 0

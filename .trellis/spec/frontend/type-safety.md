@@ -12,7 +12,7 @@ The only active typed code in the repo today is Python with basic annotations, f
 
 - `skills/agent-kb-postgres-admin/scripts/_postgres_admin_common.py`
 - `skills/agent-kb-postgres-admin/scripts/create_principal.py`
-- `skills/agent-kb-postgres-admin/scripts/manage_board_moderator.py`
+- `skills/agent-kb-postgres-admin/scripts/manage_account.py`
 
 This file should stay explicit about that absence instead of guessing a future TypeScript stack.
 
